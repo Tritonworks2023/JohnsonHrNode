@@ -1,0 +1,47 @@
+
+    const mongoose = require('mongoose');
+    const { Schema } = mongoose;
+    
+    const sercallHdrUploadSchema = new Schema({
+      SMU_SCH_CUSTCONT1: Number,
+  SMU_SCH_CUSTCONT2: Number,
+  SMU_SCH_CUSNAME: String,
+  SMU_SCH_CUSADD1: String,
+  SMU_SCH_CUSADD2: String,
+  SMU_SCH_CUSADD3: String,
+  SMU_SCH_CUSADD4: String,
+  SMU_SCH_CUSPIN: Number,
+  SMU_SCH_MECHCELL: String,
+  SMU_SCH_AMCTYPE: String,
+  SMU_SCH_AMCTODT: Date,
+  SMU_SCH_VANID: String,
+  SSM_SCH_APPTO: String,
+  SMU_SCH_SUPCELLNO: Number,
+  SMU_SCH_JOBCURSTATUS: String,
+  SMU_SCH_MODDT: Date,
+  SMU_SCH_ERRDESC: String,
+  SMU_SCH_DOORTYPE: String,
+  SMU_SCH_CHKLIST: String,
+  SMU_SCH_COMPNO: String,
+  SMU_SCH_COMPDT: Date,
+  SMU_SCH_JOBNO: String,
+  SMU_SCH_BRCODE: String,
+  SMU_SCH_REPORTBY: String,
+  SMU_SCH_REPORTCELL: String,
+  SMU_SCH_BRKDOWNTYPE: String,
+  SMU_SCH_BRKDOWNDESC: String,
+  SMU_SCH_ROUTECODE: String,
+  SMU_SCH_MECHANIC: String,
+  SMU_SCH_DEPUTEDDT: Date,
+  SMU_SCH_CRTDT: Date,
+  SMU_SCH_STATUS: String,
+  SMU_SCH_EMPCODE: String,
+  SMU_SCH_SERTYPE: String,
+  SMU_SCH_CONTNO: String,
+  SMU_SCH_DWNFLAG: String,
+  SMU_SCH_CANCFLAG: String,
+  SMU_SCH_DWNFLAGDATE: Date,
+  SMU_SCH_CUSCODE: String,
+    });
+    module.exports = mongoose.model('JLS_SERCALL_HDR_UPLOAD', sercallHdrUploadSchema);
+    
