@@ -44,7 +44,8 @@ async function createNotification(notificationData) {
                 EMPNO: notificationData.EMPNO,
                 BRCODE: notificationData.BRCODE,
                 TITLE: notificationData.TITLE,
-                DESC: notificationData.DESC
+                DESC: notificationData.DESC,
+                LVAPNO:notificationData.LVAPNO
             });
             console.log("=======createdNotification==",createdNotification);
             if (employee) {
