@@ -811,12 +811,13 @@ router.post("/apply-leave", async (req, res) => {
     const applicationNo = LVAPNO;
 
     const notificationData = {
+      LVAPNO:applicationNo,
       EMPNO: userExists.REPMGR,
       BRCODE: userExists.BRCODE,
       TITLE: "Leave Application",
       DESC: `You have received a leave application from ${employeeName} (Application No: ${applicationNo}) for your approval.`,
     };
-    createNotification(notificationData);
+    await createNotification(notificationData);
     return res.status(200).json({
       Status: "Success",
       Message: "Leave applied successfully",
@@ -1326,7 +1327,7 @@ router.post("/create-attendance", async (req, res) => {
             PA_ELSTD_LVYR: newAttendance.LVDT.getFullYear().toString(),
             PA_ELSTD_LVCODE: "CL",
           });
-          if (balanceEL.PA_ELSTD_BAL > 0) {
+          if (balanceEL?.PA_ELSTD_BAL > 0) {
             // CHECK IF EL AVAILABLE
             const applicationCount = (await LeaveDetail.countDocuments()) + 1;
             leavePayload.LVAPNO = applicationCount;
@@ -1647,7 +1648,7 @@ router.post("/check-status", async (req, res) => {
       });
     }
     const employeeDetails = await EmployeeMaster.findOne({ EMPNO }).select(
-      "LASTLOGIN BRCODE REPMGRSTATUS ORIGINALPHOTO"
+      "LASTLOGIN BRCODE REPMGRSTATUS ORIGINALPHOTO LASTLOGOUT"
     );
     //console.log("========employeeDetails",employeeDetails, req.body);
     if (!employeeDetails) {
@@ -1666,6 +1667,16 @@ router.post("/check-status", async (req, res) => {
       LASTLOGINTIME = "  ";
     }
 
+    let LASTLOGOUTTIME;
+    if (employeeDetails.LASTLOGOUT && employeeDetails.LASTLOGOUT != undefined) {
+      LASTLOGOUTTIME = new Date(employeeDetails.LASTLOGOUT).toLocaleString();
+    } else {
+      LASTLOGOUTTIME = "--";
+    }
+    console.log(
+      LASTLOGOUTTIME,
+      "=================== LASTLOGOUTTIME =================="
+    );
     let HRNAME = "JOHNSON HR";
     let HRPHONE = "261520003";
     let HREMPNO = "";
@@ -1698,6 +1709,7 @@ router.post("/check-status", async (req, res) => {
 
     let responseData = {
       LASTLOGIN: new Date(LASTLOGINTIME).toLocaleString(),
+      LASTLOGOUT: LASTLOGOUTTIME,
       ORIGINALPHOTO: employeeDetails.ORIGINALPHOTO,
       HRNAME: HRNAME,
       HRPHONE: HRPHONE,
@@ -1715,7 +1727,7 @@ router.post("/check-status", async (req, res) => {
       const pendingLeaveDetailsCount = await LeaveDetail.countDocuments({
         APPROVER: EMPNO,
         STATUS: "PENDING",
-        LVCODE: { $nin: ["OD", "OS"] }, // added recently
+        //LVCODE: { $nin: ["OD", "OS"] }, // added recently
       });
       responseData.PENDINGCOUNT += pendingPermissionsCount;
       responseData.PENDINGCOUNT += pendingLeaveDetailsCount;
@@ -2373,7 +2385,7 @@ router.post("/approver-list", async (req, res) => {
     }
     const leaveListPromise = LeaveDetail.find({
       APPROVER: EMPNO,
-      LVCODE: { $nin: ["OD", "OS"] },
+      //LVCODE: { $nin: ["OD", "OS"] },
     });
     const permissionListPromise = Permission.find({ APPROVER: EMPNO });
 
@@ -2702,9 +2714,22 @@ router.post("/hidecheckin", async (req, res) => {
   try {
     const serviceUsers = await ServiceUserDetails.findOne({
       user_id: req.body.EMPNO,
+      emp_type: {
+        $in: [
+          "Engineer",
+          "JIC Tech",
+          "Mechanic",
+          "Repair Engineer",
+          "Repair Mechanic",
+          "SESA (Service Sales)",
+          "Service Head",
+          "Van User",
+        ],
+      },
     });
     const operationUsers = await UserManagement.findOne({
       agent_code: req.body.EMPNO,
+      user_designation: { $in: ["Mobile User", "Oper Tech"] },
     });
 
     if (serviceUsers || operationUsers) {
