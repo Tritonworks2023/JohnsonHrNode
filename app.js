@@ -245,6 +245,24 @@ app.post("/travelUpload", async function (req, res) {
   });
 });
 
+
+// HR MODULE APP
+app.get("/api/hrmodule_getlatest_version", function (req, res) {
+  res.json({
+    Status: "Success",
+    Message: "Version",
+    Data: {
+      // version : "15-04-2024-02",
+      // apk_link : `${baseURL}/api/uploads/JLSMART_HR_15_04_2024_02.apk`
+      // version : "07-06-2024-01",
+      // apk_link : `${baseURL}/api/uploads/JLSMART_HR_07_05_2024_01.apk`
+      version: "13-11-2024-01", //"11-11-2024-01", //"17-06-2024-01",
+      apk_link: `https://smart.johnsonliftsltd.com:3000/api/uploads/JLSMART_HR_13_11_2024_01.apk`, //JLSMART_HR_17_06_2024_01.apk
+    },
+    Code: 200,
+  });
+});
+
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
