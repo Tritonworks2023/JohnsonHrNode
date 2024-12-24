@@ -726,7 +726,7 @@ router.post("/getAllEmployeesProjection", async (req, res) => {
 router.post("/leave-list", async (req, res) => {
   try {
     let filter = {
-      LVCODE: { $nin: ["OD", "OS"] },
+      LVCODE: { $nin: ["DO", "OS"] },
     };
     if (req.body.BRCODE && Array.isArray(req.body.BRCODE)) {
       filter.BRCODE = { $in: req.body.BRCODE };
@@ -752,7 +752,7 @@ router.post("/leave-list", async (req, res) => {
 router.post("/movement-list", async (req, res) => {
   try {
     let filter = {
-      LVCODE: { $in: ["OD", "OS"] },
+      LVCODE: { $in: ["DO", "OS"] },
     };
     if (req.body.BRCODE && Array.isArray(req.body.BRCODE)) {
       filter.BRCODE = { $in: req.body.BRCODE };

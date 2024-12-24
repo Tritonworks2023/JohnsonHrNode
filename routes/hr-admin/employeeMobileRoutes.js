@@ -60,7 +60,7 @@ const leaveCodes = [
   { LVCODE: "EL", LVDESC: "Earned Leave" },
   { LVCODE: "SL", LVDESC: "Sick Leave" },
   { LVCODE: "CO", LVDESC: "Comp-off" },
-  { LVCODE: "OD", LVDESC: "On Duty" },
+  { LVCODE: "DO", LVDESC: "On Duty" },
   { LVCODE: "OS", LVDESC: "Out Station" },
 ];
 
@@ -695,7 +695,7 @@ router.post("/apply-leave", async (req, res) => {
       });
     }
 
-    if (LVCODE != "OD" && LVCODE != "OS") {
+    if (LVCODE != "DO" && LVCODE != "OS") {
       const leaveBalanceValidation = await validateLeaveBalance(
         EMPNO,
         LVCODE,
@@ -736,7 +736,7 @@ router.post("/apply-leave", async (req, res) => {
 
     let ISESLVCODE, IISESLVCODE;
 
-    if (LVCODE == "OD" || LVCODE == "OS") {
+    if (LVCODE == "DO" || LVCODE == "OS") {
       TYPE = "MOVEMENT";
       ISESLVCODE = LVCODE;
       IISESLVCODE = LVCODE;
@@ -811,7 +811,7 @@ router.post("/apply-leave", async (req, res) => {
     const applicationNo = LVAPNO;
 
     const notificationData = {
-      LVAPNO:applicationNo,
+      LVAPNO: applicationNo,
       EMPNO: userExists.REPMGR,
       BRCODE: userExists.BRCODE,
       TITLE: "Leave Application",
@@ -1727,7 +1727,7 @@ router.post("/check-status", async (req, res) => {
       const pendingLeaveDetailsCount = await LeaveDetail.countDocuments({
         APPROVER: EMPNO,
         STATUS: "PENDING",
-        //LVCODE: { $nin: ["OD", "OS"] }, // added recently
+        //LVCODE: { $nin: ["DO", "OS"] }, // added recently
       });
       responseData.PENDINGCOUNT += pendingPermissionsCount;
       responseData.PENDINGCOUNT += pendingLeaveDetailsCount;
@@ -2385,7 +2385,7 @@ router.post("/approver-list", async (req, res) => {
     }
     const leaveListPromise = LeaveDetail.find({
       APPROVER: EMPNO,
-      //LVCODE: { $nin: ["OD", "OS"] },
+      //LVCODE: { $nin: ["DO", "OS"] },
     });
     const permissionListPromise = Permission.find({ APPROVER: EMPNO });
 
@@ -2538,7 +2538,7 @@ router.post("/leave-permission-action", async (req, res) => {
     } else {
       if (
         ACTION === "APPROVED" &&
-        request.LVCODE != "OD" &&
+        request.LVCODE != "DO" &&
         request.LVCODE != "OS"
       ) {
         const employeeExists = await validateUserExistence(request.EMPNO);
