@@ -600,6 +600,8 @@ router.post("/apply-movement", async (req, res) => {
       ADVANCEAMTFLG,
       APPROVER: userExists.REPMGR,
       JOBSPECIFIC,
+      FRMSESSION,      // added for DO 
+      TOSESSION,
     };
     if (LVCODE === "OS") {
       insertObj.FRMSESSION = FRMSESSION;

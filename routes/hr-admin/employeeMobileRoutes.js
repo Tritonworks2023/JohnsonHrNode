@@ -2726,6 +2726,7 @@ router.post("/hidecheckin", async (req, res) => {
           "Van User",
         ],
       },
+      status: "Active",
     });
     const operationUsers = await UserManagement.findOne({
       agent_code: req.body.EMPNO,
