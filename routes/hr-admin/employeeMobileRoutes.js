@@ -962,7 +962,7 @@ router.post("/create-attendance", async (req, res) => {
       "=================================== ios hr attendance ============================"
     );
 
-    if (!EMPNO || !BRCODE || !attendanceType || !LAT || !LNG || !ADDRESS) {
+    if (!EMPNO || !BRCODE || !attendanceType ) {
       return res.status(400).json({
         Status: "Failed",
         Message: "EMPNO, BRCODE, and attendanceType are required fields",
@@ -970,6 +970,16 @@ router.post("/create-attendance", async (req, res) => {
         Code: 400,
       });
     }
+
+    // if(!LAT || !LNG || !ADDRESS){
+    //   return res.status(400).json({
+    //     Status: "Failed",
+    //     Message: "Location Doesn't Captured",
+    //     Data: {},
+    //     Code: 400,
+    //   });
+    // }
+    
     if (attendanceType !== "CHECKIN" && attendanceType !== "CHECKOUT") {
       return res.status(400).json({
         Status: "Failed",
