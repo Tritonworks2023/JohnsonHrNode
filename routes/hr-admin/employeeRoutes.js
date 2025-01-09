@@ -23,6 +23,8 @@ const Permission = require("../../models/permissionModel");
 const CompensatoryOff = require("../../models/compensatoryOffModel");
 const BalanceLeave = require("../../models/balanceLeaveModel");
 const Holiday = require("../../models/holidayModel");
+const operationUsersModel = require("../../models/user_managementModel");
+const serviceUsersModel = require("../../models/service_userdetailsModel");
 
 const formatDateMiddleware = (req, res, next) => {
   const originalJson = res.json;
@@ -625,10 +627,33 @@ router.post("/getAllEmployees", async (req, res) => {
       "============================ filter ======================="
     );
     const employees = await EmployeeMaster.find(filter);
+    const finalData = [];
+    for (const element of employees) {
+      const oprData = await operationUsersModel.findOne({
+        agent_code: element.EMPNO,
+      });
+      const serData = await serviceUsersModel.findOne({
+        user_id: element.EMPNO,
+      });
+
+      if (oprData !== null) {
+        element.DPT_TYPE = "OPERATION";
+        finalData.push(element);
+      } else if (serData !== null) {
+        element.DPT_TYPE = "SERVICE";
+        finalData.push(element);
+      } else {
+        finalData.push(element);
+      }
+    }
+    console.log(
+      finalData[0],
+      "============================== finalData ========================"
+    );
     res.json({
       Status: "Success",
       Message: "Employees retrieved successfully",
-      Data: employees,
+      Data: finalData,
       Code: 200,
     });
   } catch (error) {

@@ -680,6 +680,22 @@ router.post("/apply-leave", async (req, res) => {
       }
     }
 
+    if (LVCODE === "CO") {
+      // Check for maximum consecutive CL days
+      console.log(LVCODE, "============== LVCODE ========================");
+      console.log(
+        leaveDuration,
+        "==============leaveDuration leaveDuration ==========="
+      );
+      if (leaveDuration > 2) {
+        return res.status(400).json({
+          Status: "Failed",
+          Message: "Comp-Off cannot be taken for more than 2 consecutive days",
+          Code: 400,
+        });
+      }
+    }
+
     const isHolidayValidation = await validateHolidayDate(
       parsedLVFRMDT,
       parsedLVTODT,
@@ -818,6 +834,80 @@ router.post("/apply-leave", async (req, res) => {
       DESC: `You have received a leave application from ${employeeName} (Application No: ${applicationNo}) for your approval.`,
     };
     await createNotification(notificationData);
+
+    // reduce leave balance count
+
+    const startDate = moment(LVFRMDT, "DD-MM-YYYY");
+    const endDate = moment(LVTODT, "DD-MM-YYYY");
+    const year = moment().format("YY");
+    console.log(
+      startDate,
+      "====================== startDate ========================"
+    );
+    console.log(
+      endDate,
+      "====================== endDate ========================"
+    );
+    console.log(year, "====================== year =====================");
+    const daysCount = endDate.diff(startDate, "days");
+    if (LVCODE === "CL") {
+      const dbCount = await BalanceLeave.findOne({
+        PA_ELSTD_EMPNO: EMPNO,
+        PA_ELSTD_LVCODE: "CL",
+        PA_ELSTD_LVYR: year,
+      });
+      const count = Number(dbCount.PA_ELSTD_BAL) - Number(daysCount + 1);
+
+      await BalanceLeave.findOneAndUpdate(
+        { PA_ELSTD_EMPNO: EMPNO, PA_ELSTD_LVCODE: "CL", PA_ELSTD_LVYR: year },
+        {
+          $set: {
+            PA_ELSTD_BAL: count,
+          },
+        }
+      );
+    }
+
+    // DEDUCT EL FROM LEAVE BALANCE
+
+    if (LVCODE === "EL") {
+      const dbCount = await BalanceLeave.findOne({
+        PA_ELSTD_EMPNO: EMPNO,
+        PA_ELSTD_LVCODE: "EL",
+        PA_ELSTD_LVYR: year,
+      });
+      const count = Number(dbCount.PA_ELSTD_BAL) - Number(daysCount + 1);
+
+      await BalanceLeave.findOneAndUpdate(
+        { PA_ELSTD_EMPNO: EMPNO, PA_ELSTD_LVCODE: "EL", PA_ELSTD_LVYR: year },
+        {
+          $set: {
+            PA_ELSTD_BAL: count,
+          },
+        }
+      );
+    }
+
+    // DEDUCT SL FROM LEAVE BALANCE
+
+    if (LVCODE === "SL") {
+      const dbCount = await BalanceLeave.findOne({
+        PA_ELSTD_EMPNO: EMPNO,
+        PA_ELSTD_LVCODE: "SL",
+        PA_ELSTD_LVYR: year,
+      });
+      const count = Number(dbCount.PA_ELSTD_BAL) - Number(daysCount + 1);
+
+      await BalanceLeave.findOneAndUpdate(
+        { PA_ELSTD_EMPNO: EMPNO, PA_ELSTD_LVCODE: "SL", PA_ELSTD_LVYR: year },
+        {
+          $set: {
+            PA_ELSTD_BAL: count,
+          },
+        }
+      );
+    }
+
     return res.status(200).json({
       Status: "Success",
       Message: "Leave applied successfully",
@@ -962,7 +1052,7 @@ router.post("/create-attendance", async (req, res) => {
       "=================================== ios hr attendance ============================"
     );
 
-    if (!EMPNO || !BRCODE || !attendanceType ) {
+    if (!EMPNO || !BRCODE || !attendanceType) {
       return res.status(400).json({
         Status: "Failed",
         Message: "EMPNO, BRCODE, and attendanceType are required fields",
@@ -979,7 +1069,7 @@ router.post("/create-attendance", async (req, res) => {
     //     Code: 400,
     //   });
     // }
-    
+
     if (attendanceType !== "CHECKIN" && attendanceType !== "CHECKOUT") {
       return res.status(400).json({
         Status: "Failed",
@@ -1317,6 +1407,20 @@ router.post("/create-attendance", async (req, res) => {
         );
         await LeaveDetail.create(payload);
       };
+
+      // check if permission already approved. If approved should not auto deduct
+
+      const startOfDay = moment().startOf("days");
+      const endOfDay = moment().endOf("days");
+
+      const existingApprovedPermissions = await Permission.find({
+        EMPNO,
+        PERMISSIONDATE: {
+          $gte: new Date(startOfDay),
+          $lte: new Date(endOfDay),
+        },
+      });
+
       if (hours === 2) {
         if (permissionsDuration60 === 2) {
           for (let i = 1; i <= 2; i++) {
@@ -2682,6 +2786,34 @@ router.post("/compensatoryOffAction", async (req, res) => {
     compensatoryOffEntry.SANCBY = approverId;
     compensatoryOffEntry.SANCDT = moment().toDate();
     await compensatoryOffEntry.save();
+
+    const year = moment().format("YY");
+
+    const addcount =
+      compensatoryOffEntry.COMPOFFHOURS === 4
+        ? 0.5
+        : compensatoryOffEntry.COMPOFFHOURS === 8
+        ? 1
+        : 0; // Default value in case COMPOFFHOURS is neither 4 nor 8
+
+    // CREDIT COMP-OFF
+    const dbCount = await BalanceLeave.findOne({
+      PA_ELSTD_EMPNO: compensatoryOffEntry.EMPNO,
+      PA_ELSTD_LVCODE: "CO",
+      PA_ELSTD_LVYR: year,
+    });
+
+    const count = Number(dbCount.PA_ELSTD_BAL) + Number(addcount);
+
+    await BalanceLeave.findOneAndUpdate(
+      {
+        PA_ELSTD_EMPNO: compensatoryOffEntry.EMPNO,
+        PA_ELSTD_LVCODE: "CO",
+        PA_ELSTD_LVYR: year,
+      },
+      { $set: { PA_ELSTD_BAL: count } }
+    );
+
     res.json({
       Status: "Success",
       Code: 200,
