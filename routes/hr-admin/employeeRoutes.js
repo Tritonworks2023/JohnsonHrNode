@@ -622,10 +622,6 @@ router.post("/getAllEmployees", async (req, res) => {
       filter.STATUS = req.body.STATUS;
     }
 
-    console.log(
-      filter,
-      "============================ filter ======================="
-    );
     const employees = await EmployeeMaster.find(filter);
     const finalData = [];
     for (const element of employees) {
@@ -635,25 +631,82 @@ router.post("/getAllEmployees", async (req, res) => {
       const serData = await serviceUsersModel.findOne({
         user_id: element.EMPNO,
       });
-
       if (oprData !== null) {
-        element.DPT_TYPE = "OPERATION";
+        element["_doc"].DPT_TYPE = oprData.user_designation;
         finalData.push(element);
       } else if (serData !== null) {
-        element.DPT_TYPE = "SERVICE";
+        element["_doc"].DPT_TYPE = serData.emp_type;
         finalData.push(element);
       } else {
+        element["_doc"].DPT_TYPE = "";
         finalData.push(element);
       }
     }
-    console.log(
-      finalData[0],
-      "============================== finalData ========================"
-    );
     res.json({
       Status: "Success",
       Message: "Employees retrieved successfully",
       Data: finalData,
+      Code: 200,
+    });
+  } catch (error) {
+    console.error("Error retrieving employees:", error);
+    res.json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Data: {},
+      Code: 200,
+    });
+  }
+});
+
+// update service type
+
+router.post("/updateservtypes", async (req, res) => {
+  try {
+    let filter = { BRCODE: { $nin: ["MH03", "TN05", "TN10", "TN25"] } };
+    if (req.body.BRCODE && Array.isArray(req.body.BRCODE)) {
+      filter.BRCODE = { $in: req.body.BRCODE };
+    }
+    if (req.body.STATUS) {
+      filter.STATUS = req.body.STATUS;
+    }
+
+    const employees = await EmployeeMaster.find(filter);
+
+    for (const element of employees) {
+      const oprData = await operationUsersModel.findOne({
+        agent_code: element.EMPNO,
+      });
+      const serData = await serviceUsersModel.findOne({
+        user_id: element.EMPNO,
+      });
+      if (oprData !== null) {
+        await EmployeeMaster.findOneAndUpdate(
+          {
+            EMPNO: oprData.agent_code,
+          },
+          { $set: { SERVICETYPE: oprData.user_designation } }
+        );
+      } else if (serData !== null) {
+        await EmployeeMaster.findOneAndUpdate(
+          {
+            EMPNO: serData.user_id,
+          },
+          { $set: { SERVICETYPE: serData.emp_type } }
+        );
+      } else {
+        await EmployeeMaster.findOneAndUpdate(
+          {
+            EMPNO: element.EMPNO,
+          },
+          { $set: { SERVICETYPE: "" } }
+        );
+      }
+    }
+    res.json({
+      Status: "Success",
+      Message: "Employees Updated successfully",
+      Data: [],
       Code: 200,
     });
   } catch (error) {

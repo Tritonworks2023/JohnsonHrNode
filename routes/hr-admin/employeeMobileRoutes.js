@@ -668,6 +668,8 @@ router.post("/apply-leave", async (req, res) => {
     }
     console.log("======leaveDuration", leaveDuration);
 
+    const year_YYYY = moment().format("YYYY");
+
     if (LVCODE === "CL") {
       // Check for maximum consecutive CL days
       if (leaveDuration > 2) {
@@ -675,6 +677,40 @@ router.post("/apply-leave", async (req, res) => {
           Status: "Failed",
           Message:
             "Causal leave cannot be taken for more than 2 consecutive days",
+          Code: 400,
+        });
+      }
+
+      // check clubbing for WH or DH
+      const checkClubbing = await Holiday.findOne({
+        HLDYYR: year_YYYY,
+        HLDYDT: {
+          $in: [
+            moment(parsedLVFRMDT).add(1, "days"),
+            moment(parsedLVFRMDT).subtract(1, "days"),
+          ],
+        },
+        HLDYCD: { $in: ["DH", "WH"] },
+        BRCODE: BRCODE,
+      });
+
+      // check if cl applied
+
+      const checkClApplied = await LeaveDetail.findOne({
+        LVCODE: "CL",
+        LVFRMDT: {
+          $in: [
+            { $gte: new Date(moment(parsedLVFRMDT).add(2, "days")) },
+            { $lte: new Date(moment(parsedLVFRMDT).subtract(2, "days")) },
+          ],
+        },
+        EMPNO: EMPNO,
+      });
+
+      if (checkClubbing !== null && checkClApplied !== null) {
+        return res.status(400).json({
+          Status: "Failed",
+          Message: "Causal leave cannot be applied before or after DH or WH",
           Code: 400,
         });
       }
@@ -1421,7 +1457,7 @@ router.post("/create-attendance", async (req, res) => {
         },
       });
 
-      if (hours === 2) {
+      if (hours === 2 && !existingApprovedPermissions.DURATION === "120") {
         if (permissionsDuration60 === 2) {
           for (let i = 1; i <= 2; i++) {
             newPermission.DURATION = "60";
@@ -1521,19 +1557,37 @@ router.post("/create-attendance", async (req, res) => {
           // }
           // }
         }
-      } else if (hours === 1) {
+      } else if (
+        hours === 1 &&
+        !existingApprovedPermissions.DURATION === "60"
+      ) {
         newPermission.DURATION = "60";
         createPermission(newPermission);
-      } else if (hours === 0 && minutes > 15 && minutes <= 30) {
+      } else if (
+        hours === 0 &&
+        !existingApprovedPermissions.DURATION === "15" &&
+        minutes > 15 &&
+        minutes <= 30
+      ) {
         newPermission.DURATION = "15";
         createPermission(newPermission);
-      } else if (hours === 0 && minutes > 30 && minutes <= 45) {
+      } else if (
+        hours === 0 &&
+        minutes > 30 &&
+        minutes <= 45 &&
+        !existingApprovedPermissions.DURATION === "15"
+      ) {
         for (let i = 1; i <= 2; i++) {
           newPermission.DURATION = "15";
           // Save the new permission request
           createPermission(newPermission);
         }
-      } else if (hours === 0 && minutes > 45 && minutes <= 60) {
+      } else if (
+        hours === 0 &&
+        minutes > 45 &&
+        minutes <= 60 &&
+        !existingApprovedPermissions.DURATION === "15"
+      ) {
         for (let i = 1; i <= 3; i++) {
           newPermission.DURATION = "15";
           // Save the new permission request
@@ -2858,6 +2912,7 @@ router.post("/hidecheckin", async (req, res) => {
       user_id: req.body.EMPNO,
       emp_type: {
         $in: [
+          // hide checkin to this designation
           "Engineer",
           "JIC Tech",
           "Mechanic",
@@ -2872,21 +2927,21 @@ router.post("/hidecheckin", async (req, res) => {
     });
     const operationUsers = await UserManagement.findOne({
       agent_code: req.body.EMPNO,
-      user_designation: { $in: ["Mobile User", "Oper Tech"] },
+      user_designation: { $in: ["Mobile User", "Oper Tech"] }, // hide checkin to this designation
     });
 
     if (serviceUsers || operationUsers) {
       res.json({
         Status: "Success",
         Code: 200,
-        Message: "retrieved successfully",
+        Message: "Hide Checkin",
         Data: false,
       });
     } else {
       res.json({
         Status: "Success",
         Code: 200,
-        Message: "retrieved successfully",
+        Message: "Show Checkin",
         Data: true,
       });
     }

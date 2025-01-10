@@ -61,6 +61,7 @@ const employeeMasterSchema = new mongoose.Schema({
   RESIDENTIAL_TRANSFER_STATUS: { type: Boolean, default: false },
   CREATEDDATE: { type: Date, default: Date.now },
   isHolidayCheckIn: { type: Boolean, default: false },
+  SERVICETYPE: { type: String, default: "" },
 });
 
 employeeMasterSchema.plugin(mongooseTimestamp);
