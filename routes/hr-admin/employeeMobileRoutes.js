@@ -1457,6 +1457,7 @@ router.post("/create-attendance", async (req, res) => {
         },
       });
 
+      /* 
       if (hours === 2 && !existingApprovedPermissions.DURATION === "120") {
         if (permissionsDuration60 === 2) {
           for (let i = 1; i <= 2; i++) {
@@ -1558,10 +1559,11 @@ router.post("/create-attendance", async (req, res) => {
           // }
         }
       } else if (
-        hours === 1 &&
-        !existingApprovedPermissions.DURATION === "60"
+        hours > 1 &&
+        hours < 2 &&
+        !existingApprovedPermissions.DURATION === "120"
       ) {
-        newPermission.DURATION = "60";
+        newPermission.DURATION = "120";
         createPermission(newPermission);
       } else if (
         hours === 0 &&
@@ -1594,6 +1596,35 @@ router.post("/create-attendance", async (req, res) => {
           createPermission(newPermission);
         }
       }
+*/
+      // auto deduct permission based of approved permissions
+      if (
+        hours > 1 &&
+        hours <= 2 &&
+        existingApprovedPermissions.DURATION !== "120"
+      ) {
+        newPermission.DURATION = "120"; // deduct 2hr permission if reaches 1hr above if no permissions approved for 2hr
+        createPermission(newPermission);
+      } else if (
+        minutes > 15 &&
+        minutes <= 59 &&
+        existingApprovedPermissions.DURATION !== "60"
+      ) {
+        newPermission.DURATION = "60"; // deduct 1hr permission if reaches 15min above and 1hr below if no permissions approved for 1hr
+        createPermission(newPermission);
+      } else if (
+        minutes > 5 &&
+        minutes <= 15 &&
+        existingApprovedPermissions.DURATION !== "15"
+      ) {
+        newPermission.DURATION = "15"; // deduct 15min permission if reaches 5min above and  15min below if no permissions approved for 1hr
+        createPermission(newPermission);
+      }
+
+      // TODO:: NEED TO VALIDATE MORE THAN TWO HOURS.
+      // else if(hours <=3 && hours>2){
+
+      // }
     }
 
     return res.json({

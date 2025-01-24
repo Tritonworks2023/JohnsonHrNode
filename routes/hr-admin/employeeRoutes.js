@@ -1810,6 +1810,18 @@ router.post("/update-attendance-data", async (req, res) => {
       });
     }
 
+    // cant allow to apply more than 2 concecutive days
+
+    const daysCount = moment(toDate).diff(moment(fromDate), "days") + 1;
+
+    if (daysCount > 2) {
+      return res.status(400).json({
+        Status: "Error",
+        Message: "Can't Apply Leave More Than 2 Consecutive days",
+        Code: 400,
+      });
+    }
+
     const existingAttendanceMaster = await LeaveAttendanceMaster.findOne({
       EMPNO,
     });
