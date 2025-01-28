@@ -1655,7 +1655,7 @@ router.post("/leave-list", async (req, res) => {
         Code: 400,
       });
     }
-    const leaveList = await LeaveDetail.find({ EMPNO });
+    const leaveList = await LeaveDetail.find({ EMPNO }).sort({ ENTRYDT: -1 });
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
