@@ -633,7 +633,7 @@ router.post("/apply-movement", async (req, res) => {
 
     return res.status(200).json({
       Status: "Success",
-      Message: "Leave applied successfully",
+      Message: "Movement applied successfully",
       Code: 200,
     });
   } catch (error) {

@@ -694,15 +694,13 @@ router.post("/apply-leave", async (req, res) => {
         BRCODE: BRCODE,
       });
 
-      // check if cl applied
+      // check if cl applied before and after date
 
       const checkClApplied = await LeaveDetail.findOne({
         LVCODE: "CL",
         LVFRMDT: {
-          $in: [
-            { $gte: new Date(moment(parsedLVFRMDT).add(2, "days")) },
-            { $lte: new Date(moment(parsedLVFRMDT).subtract(2, "days")) },
-          ],
+          $gte: new Date(moment(parsedLVFRMDT).add(2, "days")),
+          $lte: new Date(moment(parsedLVFRMDT).subtract(2, "days")),
         },
         EMPNO: EMPNO,
       });
@@ -748,6 +746,9 @@ router.post("/apply-leave", async (req, res) => {
     }
 
     if (LVCODE != "DO" && LVCODE != "OS") {
+      console.log(
+        "=============================== inside block ====================================="
+      );
       const leaveBalanceValidation = await validateLeaveBalance(
         EMPNO,
         LVCODE,
