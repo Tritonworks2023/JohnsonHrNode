@@ -248,6 +248,19 @@ function distanceToSegment(point, start, end) {
   return haversineDistance(x0, y0, xx, yy);
 }
 
+// get last working date
+
+function getLastWorkingDate() {
+  let lastDate = moment().endOf("month"); // Get last date of the month
+
+  // If the last date is Saturday (6) or Sunday (0), move it back to Friday (5)
+  if (lastDate.day() === 0) {
+    lastDate.subtract(1, "days"); // Move to Friday
+  }
+
+  return lastDate.format("YYYY-MM-DD");
+}
+
 // ******************************************************************************************************************************************************************************
 // USER LOGIN MOBILE
 // ******************************************************************************************************************************************************************************
@@ -614,6 +627,23 @@ router.post("/apply-leave", async (req, res) => {
     const lvYear = parsedLVFRMDT.getFullYear().toString();
     const lvToYear = parsedLVTODT.getFullYear().toString();
 
+    // cant apply leave for back dates
+
+    const twoDaysBeforeLastDate = moment()
+      .endOf("month")
+      .subtract(2, "days")
+      .format("YYYY-MM-DD");
+    if (
+      moment(LVFRMDT, "DD-MM-YYYY").isAfter(twoDaysBeforeLastDate) &&
+      moment(LVFRMDT, "DD-MM-YYYY").isSameOrBefore(twoDaysBeforeLastDate)
+    ) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Leave Can't Apply For Back Dates",
+        Code: 400,
+      });
+    }
+
     if (isNaN(parsedLVFRMDT.getTime()) || isNaN(parsedLVTODT.getTime())) {
       return res.status(400).json({
         Status: "Failed",
@@ -945,6 +975,17 @@ router.post("/apply-leave", async (req, res) => {
       );
     }
 
+    const lastWorkingDate = getLastWorkingDate();
+
+    if (parsedLVFRMDT.isSame(lastWorkingDate)) {
+      return res.status(200).json({
+        Status: "Success",
+        Message:
+          "Leaves applied / approved for last working date shall be considered only for next month ",
+        Code: 200,
+      });
+    }
+
     return res.status(200).json({
       Status: "Success",
       Message: "Leave applied successfully",
@@ -1198,81 +1239,81 @@ router.post("/create-attendance", async (req, res) => {
       });
     }
 
-    //  if (userExists.LOCCODE == "NONFLD") {
-    //     const { BRLAT, BRLNG, MEASUREMENT } = branchRecord;
-    //     console.log(
-    //       "===BRLAT, BRLNG, MEASUREMENT========",
-    //       BRLAT,
-    //       BRLNG,
-    //       MEASUREMENT
-    //     );
-    //     if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
-    //       const { points } = MEASUREMENT;
-    //       let isWithinBounds = false;
+    if (userExists.LOCCODE == "NONFLD") {
+      const { BRLAT, BRLNG, MEASUREMENT } = branchRecord;
+      console.log(
+        "===BRLAT, BRLNG, MEASUREMENT========",
+        BRLAT,
+        BRLNG,
+        MEASUREMENT
+      );
+      if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
+        const { points } = MEASUREMENT;
+        let isWithinBounds = false;
 
-    //       const point = { lat: parseFloat(LAT), lng: parseFloat(LNG) };
-    //       const bufferDistance = 1000;
-    //       const isInside = isPointInPolygon(point, points, bufferDistance);
-    //       console.log("===isInside====", isInside);
+        const point = { lat: parseFloat(LAT), lng: parseFloat(LNG) };
+        const bufferDistance = 1000;
+        const isInside = isPointInPolygon(point, points, bufferDistance);
+        console.log("===isInside====", isInside);
 
-    //       // function isPointInPolygon(point, polygon) {
-    //       //     const { lat, lng } = point;
-    //       //     let inside = false;
+        //       // function isPointInPolygon(point, polygon) {
+        //       //     const { lat, lng } = point;
+        //       //     let inside = false;
 
-    //       //     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    //       //         const xi = polygon[i].lat, yi = polygon[i].lng;
-    //       //         const xj = polygon[j].lat, yj = polygon[j].lng;
+        //       //     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        //       //         const xi = polygon[i].lat, yi = polygon[i].lng;
+        //       //         const xj = polygon[j].lat, yj = polygon[j].lng;
 
-    //       //         const intersect = ((yi > lng) !== (yj > lng)) &&
-    //       //         (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+        //       //         const intersect = ((yi > lng) !== (yj > lng)) &&
+        //       //         (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
 
-    //       //         if (intersect) inside = !inside;
-    //       //     }
-    //       //     return inside;
-    //       // }
-    //       // const polygonPoints = MEASUREMENT.points.map(point => ({ lat: point.lat, lng: point.lng }));
-    //       // const pointToCheck = { lat: LAT, lng: LNG };
-    //       // const isInside = isPointInPolygon(pointToCheck, polygonPoints);
-    //       // console.log("==isInside=====",isInside);
-    //       // console.log(`The point (${LAT}, ${LNG}) is ${isInside ? 'inside' : 'outside'} the branch location.`);
+        //       //         if (intersect) inside = !inside;
+        //       //     }
+        //       //     return inside;
+        //       // }
+        //       // const polygonPoints = MEASUREMENT.points.map(point => ({ lat: point.lat, lng: point.lng }));
+        //       // const pointToCheck = { lat: LAT, lng: LNG };
+        //       // const isInside = isPointInPolygon(pointToCheck, polygonPoints);
+        //       // console.log("==isInside=====",isInside);
+        //       // console.log(`The point (${LAT}, ${LNG}) is ${isInside ? 'inside' : 'outside'} the branch location.`);
 
-    //       // for (let i = 0; i < points.length - 1; i++) {
-    //       //     const start = points[i];
-    //       //     const end = points[i + 1];
-    //       //     const distanceStart = await calculateDistance(LAT, LNG, start.lat, start.lng);
-    //       //     const distanceEnd = await calculateDistance(LAT, LNG, end.lat, end.lng);
-    //       //     const distanceSegment = await calculateDistance(start.lat, start.lng, end.lat, end.lng);
+        //       // for (let i = 0; i < points.length - 1; i++) {
+        //       //     const start = points[i];
+        //       //     const end = points[i + 1];
+        //       //     const distanceStart = await calculateDistance(LAT, LNG, start.lat, start.lng);
+        //       //     const distanceEnd = await calculateDistance(LAT, LNG, end.lat, end.lng);
+        //       //     const distanceSegment = await calculateDistance(start.lat, start.lng, end.lat, end.lng);
 
-    //       //     console.log("===distanceStart========",distanceStart,distanceEnd, distanceSegment);
-    //       //     console.log("===math.aps========", Math.abs(distanceStart + distanceEnd - distanceSegment) );
-    //       //     if (Math.abs(distanceStart + distanceEnd - distanceSegment) < 150) {
-    //       //         isWithinBounds = true;
-    //       //         break;
-    //       //     }
-    //       // }
-    //       if (!isInside) {
-    //         console.log("==================== step 1========================")
-    //         return res.status(400).json({
-    //           Status: "Failed",
-    //           Message: "You are away from the branch location",
-    //           Data: {},
-    //           Code: 400,
-    //         });
-    //       }
-    //     } else {
-    //       console.log("==================== step 2========================")
+        //       //     console.log("===distanceStart========",distanceStart,distanceEnd, distanceSegment);
+        //       //     console.log("===math.aps========", Math.abs(distanceStart + distanceEnd - distanceSegment) );
+        //       //     if (Math.abs(distanceStart + distanceEnd - distanceSegment) < 150) {
+        //       //         isWithinBounds = true;
+        //       //         break;
+        //       //     }
+        //       // }
+        if (!isInside) {
+          console.log("==================== step 1========================");
+          return res.status(400).json({
+            Status: "Failed",
+            Message: "You are away from the branch location",
+            Data: {},
+            Code: 400,
+          });
+        }
+      } else {
+        console.log("==================== step 2========================");
 
-    //       let isWithinBounds = await isWithinRadius(LAT, LNG, BRLAT, BRLNG);
-    //       if (isWithinBounds == false) {
-    //         return res.status(400).json({
-    //           Status: "Failed",
-    //           Message: "You are away from the branch location",
-    //           Data: {},
-    //           Code: 400,
-    //         });
-    //       }
-    //     }
-    //   }
+        let isWithinBounds = await isWithinRadius(LAT, LNG, BRLAT, BRLNG);
+        if (isWithinBounds == false) {
+          return res.status(400).json({
+            Status: "Failed",
+            Message: "You are away from the branch location",
+            Data: {},
+            Code: 400,
+          });
+        }
+      }
+    }
 
     if (userExists.LOCCODE == "NOLOC") {
       return res.status(400).json({
@@ -2558,10 +2599,10 @@ router.post("/movement-list", async (req, res) => {
 router.get("/logoutReason", function (req, res) {
   var StateList = [
     {
-      logout_reason: "LUNCH BREAK",
+      logout_reason: "DAY OUT",
     },
     {
-      logout_reason: "DAY OUT",
+      logout_reason: "LUNCH BREAK",
     },
   ];
   res.json({
