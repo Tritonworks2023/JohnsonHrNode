@@ -585,7 +585,7 @@ router.post("/apply-movement", async (req, res) => {
       ISESLVCODE: LVCODE,
       IISESLVCODE: LVCODE,
       REASON: REASON || "",
-      STATUS: "PENDING",
+      STATUS: req.body.ACTION?req.body.ACTION:"PENDING",
       SOURCE: "JLSMART",
       ENTRYBY,
       ENTRYDT: moment().toDate(),
