@@ -151,8 +151,37 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   //    return d;
 }
 
+function isPointInPolygon(point, polygon, buffer = 0) {
+  const x = point.lat,
+    y = point.lng;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lat,
+      yi = polygon[i].lng;
+    const xj = polygon[j].lat,
+      yj = polygon[j].lng;
+
+    const intersect =
+      yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+
+  if (inside) return true;
+
+  // Check buffer distance
+  for (let i = 0; i < polygon.length - 1; i++) {
+    const start = polygon[i];
+    const end = polygon[i + 1];
+    const d = distanceToSegment(point, start, end);
+    if (d <= buffer) return true;
+  }
+
+  return false;
+}
+
 function isWithinRadius(lat, lng, brlat, brlng, radius = 150) {
-  const earthRadius = 6371000;
+  const earthRadius = 6371000; // meters
   const latRad = (lat * Math.PI) / 180;
   const lngRad = (lng * Math.PI) / 180;
   const brlatRad = (brlat * Math.PI) / 180;
@@ -170,48 +199,8 @@ function isWithinRadius(lat, lng, brlat, brlng, radius = 150) {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = earthRadius * c;
+
   return distance <= radius;
-}
-
-function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // radius of Earth in meters
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // distance in meters
-}
-
-function isPointInPolygon(point, polygon, buffer = 0) {
-  const x = point.lat,
-    y = point.lng;
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].lat,
-      yi = polygon[i].lng;
-    const xj = polygon[j].lat,
-      yj = polygon[j].lng;
-    const intersect =
-      yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  if (inside) return true;
-
-  for (let i = 0; i < polygon.length - 1; i++) {
-    const start = polygon[i];
-    const end = polygon[i + 1];
-    const d = distanceToSegment(point, start, end);
-    console.log("======d", d);
-    console.log("======buffer", buffer);
-    if (d <= buffer) return true;
-  }
-
-  return false;
 }
 
 function distanceToSegment(point, start, end) {
@@ -246,6 +235,20 @@ function distanceToSegment(point, start, end) {
   }
 
   return haversineDistance(x0, y0, xx, yy);
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // distance in meters
 }
 
 // get last working date
@@ -1244,81 +1247,44 @@ router.post("/create-attendance", async (req, res) => {
       });
     }
 
-    // if (userExists.LOCCODE == "NONFLD") {
-    //   const { BRLAT, BRLNG, MEASUREMENT } = branchRecord;
-    //   console.log(
-    //     "===BRLAT, BRLNG, MEASUREMENT========",
-    //     BRLAT,
-    //     BRLNG,
-    //     MEASUREMENT
-    //   );
-    //   if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
-    //     const { points } = MEASUREMENT;
-    //     let isWithinBounds = false;
-
-    //     const point = { lat: parseFloat(LAT), lng: parseFloat(LNG) };
-    //     const bufferDistance = 1000;
-    //     const isInside = isPointInPolygon(point, points, bufferDistance);
-    //     console.log("===isInside====", isInside);
-
-    //     //       // function isPointInPolygon(point, polygon) {
-    //     //       //     const { lat, lng } = point;
-    //     //       //     let inside = false;
-
-    //     //       //     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    //     //       //         const xi = polygon[i].lat, yi = polygon[i].lng;
-    //     //       //         const xj = polygon[j].lat, yj = polygon[j].lng;
-
-    //     //       //         const intersect = ((yi > lng) !== (yj > lng)) &&
-    //     //       //         (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
-
-    //     //       //         if (intersect) inside = !inside;
-    //     //       //     }
-    //     //       //     return inside;
-    //     //       // }
-    //     //       // const polygonPoints = MEASUREMENT.points.map(point => ({ lat: point.lat, lng: point.lng }));
-    //     //       // const pointToCheck = { lat: LAT, lng: LNG };
-    //     //       // const isInside = isPointInPolygon(pointToCheck, polygonPoints);
-    //     //       // console.log("==isInside=====",isInside);
-    //     //       // console.log(`The point (${LAT}, ${LNG}) is ${isInside ? 'inside' : 'outside'} the branch location.`);
-
-    //     //       // for (let i = 0; i < points.length - 1; i++) {
-    //     //       //     const start = points[i];
-    //     //       //     const end = points[i + 1];
-    //     //       //     const distanceStart = await calculateDistance(LAT, LNG, start.lat, start.lng);
-    //     //       //     const distanceEnd = await calculateDistance(LAT, LNG, end.lat, end.lng);
-    //     //       //     const distanceSegment = await calculateDistance(start.lat, start.lng, end.lat, end.lng);
-
-    //     //       //     console.log("===distanceStart========",distanceStart,distanceEnd, distanceSegment);
-    //     //       //     console.log("===math.aps========", Math.abs(distanceStart + distanceEnd - distanceSegment) );
-    //     //       //     if (Math.abs(distanceStart + distanceEnd - distanceSegment) < 150) {
-    //     //       //         isWithinBounds = true;
-    //     //       //         break;
-    //     //       //     }
-    //     //       // }
-    //     if (!isInside) {
-    //       console.log("==================== step 1========================");
-    //       return res.status(400).json({
-    //         Status: "Failed",
-    //         Message: "You are away from the branch location",
-    //         Data: {},
-    //         Code: 400,
-    //       });
-    //     }
-    //   } else {
-    //     console.log("==================== step 2========================");
-
-    //     let isWithinBounds = await isWithinRadius(LAT, LNG, BRLAT, BRLNG);
-    //     if (isWithinBounds == false) {
-    //       return res.status(400).json({
-    //         Status: "Failed",
-    //         Message: "You are away from the branch location",
-    //         Data: {},
-    //         Code: 400,
-    //       });
-    //     }
-    //   }
-    // }
+    if (userExists.LOCCODE == "NONFLD") {
+      const { BRLAT, BRLNG, MEASUREMENT } = branchRecord;
+      console.log(
+        "===BRLAT, BRLNG, MEASUREMENT========",
+        BRLAT,
+        BRLNG,
+        MEASUREMENT
+      );
+      if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
+        const { points } = MEASUREMENT;
+        const point = { lat: LAT, lng: LNG };
+        const bufferDistance = 200; // Adjust buffer as needed
+    
+        const isInside = isPointInPolygon(point, points, bufferDistance);
+        console.log("Inside Polygon:", isInside);
+    
+        if (!isInside) {
+          return res.status(400).json({
+            Status: "Failed",
+            Message: "You are away from the branch location",
+            Data: {},
+            Code: 400,
+          });
+        }
+  
+      } else {
+        let isWithinBounds = isWithinRadius(LAT, LNG, BRLAT, BRLNG);
+        if (!isWithinBounds) {
+          console.log("❌ You are away from the branch location (radius check)");
+          return res.status(400).json({
+            Status: "Failed",
+            Message: "You are away from the branch location",
+            Data: {},
+            Code: 400,
+          });
+        }
+      }
+    }
 
     if (userExists.LOCCODE == "NOLOC") {
       return res.status(400).json({
