@@ -600,7 +600,7 @@ router.post("/add-expenses", async (req, res) => {
         let checkBoardingBill = false;
 
         if (!city && +expenseDeviationData[type].amount > 0) {
-          res.status(400).json({
+         return res.status(400).json({
             Status: "Failed",
             Message: `Please enter city`,
             Code: 400,
