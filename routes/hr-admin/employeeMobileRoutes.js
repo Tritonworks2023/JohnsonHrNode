@@ -981,9 +981,16 @@ router.post("/apply-leave", async (req, res) => {
     const lastWorkingDate = getLastWorkingDate();
 
     // check leave applied before 11 am on last working date
-
+    console.log(
+      lastWorkingDate,
+      "last working day ================================================"
+    );
+    console.log(
+      parsedLVFRMDT,
+      "last working day ================================================"
+    );
     if (
-      parsedLVFRMDT.isSame(lastWorkingDate) &&
+      moment(parsedLVFRMDT).isSame(lastWorkingDate) &&
       moment().isBefore(moment().hour(11).minute(0).second(0))
     ) {
       return res.status(200).json({
@@ -1258,11 +1265,11 @@ router.post("/create-attendance", async (req, res) => {
       if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
         const { points } = MEASUREMENT;
         const point = { lat: LAT, lng: LNG };
-        const bufferDistance = 200; // Adjust buffer as needed
-    
+        const bufferDistance = 0; // Adjust buffer as needed
+
         const isInside = isPointInPolygon(point, points, bufferDistance);
         console.log("Inside Polygon:", isInside);
-    
+
         if (!isInside) {
           return res.status(400).json({
             Status: "Failed",
@@ -1271,11 +1278,12 @@ router.post("/create-attendance", async (req, res) => {
             Code: 400,
           });
         }
-  
       } else {
         let isWithinBounds = isWithinRadius(LAT, LNG, BRLAT, BRLNG);
         if (!isWithinBounds) {
-          console.log("❌ You are away from the branch location (radius check)");
+          console.log(
+            "❌ You are away from the branch location (radius check)"
+          );
           return res.status(400).json({
             Status: "Failed",
             Message: "You are away from the branch location",
@@ -1785,6 +1793,7 @@ router.post("/available-leaves", async (req, res) => {
     console.log("===========existingPermissions", existingPermissions);
     let permissionsDuration15 = 3;
     let permissionsDuration60 = 2;
+    // let permissionsDuration60 = 2;
     let movementCount = 0;
 
     if (existingPermissions.length > 0) {
@@ -2598,8 +2607,10 @@ router.post("/approver-list", async (req, res) => {
     const leaveListPromise = LeaveDetail.find({
       APPROVER: EMPNO,
       //LVCODE: { $nin: ["DO", "OS"] },
+    }).sort({ _id: -1 });
+    const permissionListPromise = Permission.find({ APPROVER: EMPNO }).sort({
+      _id: -1,
     });
-    const permissionListPromise = Permission.find({ APPROVER: EMPNO });
 
     const [leaveList, permissionList] = await Promise.all([
       leaveListPromise,
@@ -2709,6 +2720,7 @@ router.post("/leave-permission-action", async (req, res) => {
   try {
     const { TYPE, ID, ACTION, EMPLOYEE_ID } = req.body;
     const today = moment().toDate();
+    const month = moment().month();
     console.log("====request", req.body);
     let request;
     if (TYPE === "Permission") {
@@ -2720,12 +2732,41 @@ router.post("/leave-permission-action", async (req, res) => {
           Code: 404,
         });
       }
+
+      // block previous month approval
+
+      console.log("===================== month", month);
+      console.log(
+        "====Number(moment(request.PERMISSIONDATE).format())",
+        Number(moment(request.PERMISSIONDATE).format("MM"))
+      );
+
+      if (
+        Number(moment(request.PERMISSIONDATE).format("MM")) >
+        Number(month) + 1
+      ) {
+        return res.status(404).json({
+          Status: "Failed",
+          Message: "Cant Approve Permission For Previous Month",
+          Code: 404,
+        });
+      }
     } else {
       request = await LeaveDetail.findById(ID);
       if (!request) {
         return res.status(404).json({
           Status: "Failed",
           Message: "Leave request not found",
+          Code: 404,
+        });
+      }
+
+      // block previous month leave approval
+
+      if (Number(moment(request.ENTRYDT).format("MM")) > Number(month) + 1) {
+        return res.status(404).json({
+          Status: "Failed",
+          Message: "Cant Approve For Previous Month",
           Code: 404,
         });
       }
@@ -2811,6 +2852,7 @@ router.post("/leave-permission-action", async (req, res) => {
       Code: 200,
     });
   } catch (error) {
+    console.log(error);
     console.error(`Error processing ${TYPE} action:`, error);
     return res.status(500).json({
       Status: "Failed",
