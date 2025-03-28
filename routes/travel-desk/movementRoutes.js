@@ -479,7 +479,13 @@ router.post("/apply-movement", async (req, res) => {
       );
 
       if ((employeeGrade === "E7" || employeeGrade === "E6") && !DEVIATION) {
-        if (gradeEligibility.mode === "Air" && travelTimeInHours < 10 && JOURNEYMODE!=="BUS" && JOURNEYMODE!=="TRAIN" && JOURNEYMODE!=="CAR") {
+        if (
+          gradeEligibility.mode === "Air" &&
+          travelTimeInHours < 10 &&
+          JOURNEYMODE !== "BUS" &&
+          JOURNEYMODE !== "TRAIN" &&
+          JOURNEYMODE !== "CAR"
+        ) {
           isValidJourney = false;
         }
       } else if (
@@ -496,7 +502,13 @@ router.post("/apply-movement", async (req, res) => {
           // JOURNEYMODE --- "Air"
           isValidJourney = false;
       } else if (employeeGrade === "E3" && !DEVIATION) {
-        if (travelTimeInHours < 16 && gradeEligibility.mode === "Air" && JOURNEYMODE!=="BUS" && JOURNEYMODE!=="TRAIN" && JOURNEYMODE!=="CAR")
+        if (
+          travelTimeInHours < 16 &&
+          gradeEligibility.mode === "Air" &&
+          JOURNEYMODE !== "BUS" &&
+          JOURNEYMODE !== "TRAIN" &&
+          JOURNEYMODE !== "CAR"
+        )
           isValidJourney = false;
       } else if (
         employeeGrade === "TE1" ||
@@ -584,7 +596,7 @@ router.post("/apply-movement", async (req, res) => {
       BRCODE,
       ISESLVCODE: LVCODE,
       IISESLVCODE: LVCODE,
-      REASON: REASON || "",
+      REASON:REASON,
       STATUS: req.body.ACTION ? req.body.ACTION : "PENDING",
       SOURCE: "JLSMART",
       ENTRYBY,

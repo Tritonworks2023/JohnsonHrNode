@@ -1265,7 +1265,7 @@ router.post("/create-attendance", async (req, res) => {
       if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
         const { points } = MEASUREMENT;
         const point = { lat: LAT, lng: LNG };
-        const bufferDistance = 0; // Adjust buffer as needed
+        const bufferDistance = 100; // Adjust buffer as needed
 
         const isInside = isPointInPolygon(point, points, bufferDistance);
         console.log("Inside Polygon:", isInside);

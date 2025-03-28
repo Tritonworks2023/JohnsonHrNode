@@ -1676,7 +1676,7 @@ router.post("/accommodation-data", async (req, res) => {
 router.post("/update-expense-amount", async (req, res) => {
   try {
     const data = await Expense.findOneAndUpdate(
-      { "expenses._id": new mongoose.Types.ObjectId(req.body._id) },
+      { "expenses._id": new mongoose.Types.ObjectId(req.body.expenses._id) },
       {
         $set: {
           expenses: req.body.expenses,
