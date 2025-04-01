@@ -31,6 +31,7 @@ const ServiceUserDetails = require("../../models/service_userdetailsModel");
 var admin_accessModel = require("../../models/admin_accessModel");
 
 const { createNotification } = require("./shareRoutes");
+const PushNotification = require("../../models/pushNotificationModel");
 
 const gradeOrder = [
   "E8",
@@ -1234,6 +1235,14 @@ router.post("/create-attendance", async (req, res) => {
       BRCODE,
       HLDYYR: year,
     });
+    console.log(
+      holiday,
+      "============================== holiday ====================="
+    );
+    console.log(
+      userExists.isHolidayCheckIn,
+      "=======================userExists.isHolidayCheckIn=================="
+    );
     if (holiday && !userExists.isHolidayCheckIn) {
       return res.status(400).json({
         Status: "Failed",
@@ -3129,6 +3138,86 @@ router.post("/cancel-request", async (req, res) => {
     });
   } catch (error) {
     console.log(error, "error");
+  }
+});
+
+// Approve resignation withdrawl status by Manager
+
+router.post("/withdrawlupdate", async (req, res) => {
+  try {
+    await EmployeeMaster.findOneAndUpdate(
+      { EMPNO: req.body.EMPNO },
+      { $set: { RESIGN_WITHDRAWAL_STATUS: req.body.RESIGN_WITHDRAWAL_STATUS } }
+    );
+    await PushNotification.deleteOne(
+      { EMPNO: req.body.EMPNO, TITLE: "RESIGNATION-APPROVAL" }
+    );
+    return res.status(200).json({
+      Status: "Success",
+      Message: "Resignation Withdrawl Updated Successfully",
+      Code: 200,
+    });
+  } catch (error) {
+    console.error("Error updating attendance data:", error);
+    return res.status(500).json({
+      Status: "Error",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
+  }
+});
+
+// Approve resignation withdrawl status by Manager
+
+router.post("/listwithdrawl", async (req, res) => {
+  try {
+    if (req.body.EDESIGN === "GENERAL MANAGER - HR") {
+      const data = await PushNotification.find({
+        // EMPNO: req.body.EMPNO,
+        READSTATUS: false,
+        TITLE: "RESIGNATION-APPROVAL",
+      });
+      const users = [];
+      if (data.length) {
+        for (const element of data) {
+          const userInfo = await EmployeeMaster.findOne({
+            EMPNO: element.EMPNO,
+          });
+          console.log(
+            userInfo,
+            "============================= userInfo ========================"
+          );
+          const element1 = { ...element["_doc"] };
+          element1.ENAME = userInfo["_doc"].ENAME;
+          console.log(
+            element1,
+            "============================== element ========================="
+          );
+
+          users.push(element1);
+        }
+      }
+      return res.status(200).json({
+        Status: "Success",
+        Message: "Resignation Withdrawl Updated Successfully",
+        Data: users,
+        Code: 200,
+      });
+    } else {
+      return res.status(200).json({
+        Status: "Success",
+        Message: "Resignation Withdrawl Updated Successfully",
+        Date: [],
+        Code: 200,
+      });
+    }
+  } catch (error) {
+    console.error("Error updating attendance data:", error);
+    return res.status(500).json({
+      Status: "Error",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
   }
 });
 
