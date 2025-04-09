@@ -1691,7 +1691,12 @@ router.post("/leave-list", async (req, res) => {
         Code: 400,
       });
     }
-    const leaveList = await LeaveDetail.find({ EMPNO }).sort({ ENTRYDT: -1 });
+    // const startofMonth = moment().startOf("month").toDate();
+
+    const leaveList = await LeaveDetail.find({
+      EMPNO,
+      // createdAt: { $gte: startofMonth },
+    }).sort({ ENTRYDT: -1 });
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
@@ -2619,11 +2624,16 @@ router.post("/approver-list", async (req, res) => {
         Code: 400,
       });
     }
+    const startofMonth = moment().startOf("month").toDate();
     const leaveListPromise = LeaveDetail.find({
       APPROVER: EMPNO,
       //LVCODE: { $nin: ["DO", "OS"] },
+      createdAt: { $gte: startofMonth },
     }).sort({ _id: -1 });
-    const permissionListPromise = Permission.find({ APPROVER: EMPNO }).sort({
+    const permissionListPromise = Permission.find({
+      APPROVER: EMPNO,
+      createdAt: { $gte: startofMonth },
+    }).sort({
       _id: -1,
     });
 
@@ -2888,8 +2898,11 @@ router.post("/compensatoryOffEntriesByApprover", async (req, res) => {
         Code: 400,
       });
     }
+    const startofMonth = moment().startOf("month").toDate();
+
     const compensatoryOffEntries = await CompensatoryOff.find({
       APPROVER: approverId,
+      createdAt: { $gte: startofMonth },
     });
     res.json({
       Status: "Success",
