@@ -12,6 +12,7 @@ const fs = require("fs");
 const axios = require("axios");
 const { executeOracleQuery } = require("../../config/oracle");
 const mongoose = require("mongoose");
+const { generateTravelSummaryPDF } = require("./generate_pdf");
 
 const moment = require("moment");
 
@@ -596,7 +597,7 @@ router.post("/apply-movement", async (req, res) => {
       BRCODE,
       ISESLVCODE: LVCODE,
       IISESLVCODE: LVCODE,
-      REASON:REASON,
+      REASON: REASON,
       STATUS: req.body.ACTION ? req.body.ACTION : "PENDING",
       SOURCE: "JLSMART",
       ENTRYBY,
@@ -1009,5 +1010,146 @@ async function generateTravelId() {
   const count = await TravelDesk.countDocuments();
   return `T-${count + 1}`;
 }
+
+// generate pdf summary for submitted claim
+router.post("/claim-summary", async (req, res) => {
+  try {
+    const { movement_id, EMPNO ,endDate,startDate} = req.body;
+
+    const result = await TravelDesk.aggregate([
+      {
+        $match: {
+          // EMPNO: EMPNO,
+          movement: new mongoose.Types.ObjectId(movement_id),
+        },
+      },
+      {
+        $lookup: {
+          from: "expenses",
+          localField: "_id",
+          foreignField: "travelId",
+          as: "expenceDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$expenceDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match:
+          endDate && startDate
+            ? {
+                "expenceDetails.firstApproval.status": "PENDING",
+                "expenceDetails.finalApproval.status": "PENDING",
+                "expenceDetails.amountSettled.status": "PENDING",
+                "expenceDetails.createdAt": {
+                  $gte: new Date(startDate),
+                  $lte: new Date(endDate),
+                },
+              }
+            : {
+                "expenceDetails.firstApproval.status": "PENDING",
+                "expenceDetails.finalApproval.status": "PENDING",
+                "expenceDetails.amountSettled.status": "PENDING",
+              },
+      },
+      {
+        $lookup: {
+          from: "employeemasters",
+          localField: "employee",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $lookup: {
+          from: "leavedetails",
+          localField: "movement",
+          foreignField: "_id",
+          as: "movement",
+        },
+      },
+      {
+        $lookup: {
+          from: "accommodations",
+          localField: "accommodation",
+          foreignField: "_id",
+          as: "accommodation",
+        },
+      },
+      {
+        $addFields: {
+          employee: {
+            $arrayElemAt: ["$employee", 0],
+          },
+        },
+      },
+      {
+        $unwind: {
+          path: "$movement",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          expenceDetails: {
+            $push: "$expenceDetails",
+          },
+          accommodation: {
+            $first: "$accommodation",
+          },
+          brcode: {
+            $first: "$brcode",
+          },
+          movement: {
+            $first: "$movement",
+          },
+          employee: {
+            $first: "$employee",
+          },
+          travelId: {
+            $first: "$travelId",
+          },
+          accommodationDocuments: {
+            $first: "$accommodationDocuments",
+          },
+          ticketDocuments: {
+            $first: "$ticketDocuments",
+          },
+          travelId: {
+            $first: "$travelId",
+          },
+          status: {
+            $first: "$status",
+          },
+          __v: {
+            $first: "$__v",
+          },
+        },
+      },
+    ]);
+
+    console.log(result,"================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+
+    const summaryData = await generateTravelSummaryPDF(result[0]);
+
+    res.status(200).json({
+      Status: "Success",
+      Message: "Summary Retrived",
+      Code: 200,
+      Data: summaryData,
+    });
+  } catch (error) {
+    console.error("Error retrieving claim:", error);
+    res.status(500).json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
+  }
+});
 
 module.exports = router;
