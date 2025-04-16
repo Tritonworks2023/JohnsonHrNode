@@ -1020,7 +1020,7 @@ router.post("/claim-summary", async (req, res) => {
       {
         $match: {
           // EMPNO: EMPNO,
-          movement: new mongoose.Types.ObjectId(movement_id),
+          _id: new mongoose.Types.ObjectId(movement_id),
         },
       },
       {

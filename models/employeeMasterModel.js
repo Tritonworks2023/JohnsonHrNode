@@ -62,6 +62,7 @@ const employeeMasterSchema = new mongoose.Schema({
   CREATEDDATE: { type: Date, default: Date.now },
   isHolidayCheckIn: { type: Boolean, default: false },
   SERVICETYPE: { type: String, default: "" },
+  HRAPPVERSION: { type: String },
 });
 
 employeeMasterSchema.plugin(mongooseTimestamp);

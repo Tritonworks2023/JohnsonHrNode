@@ -3,8 +3,9 @@ const PdfPrinter = require("pdfmake");
 const moment = require("moment");
 const path = require("path");
 // const data = require("./data.json");
+const baseURL = process.env.BASE_URL
 
-const generateTravelSummaryPDF = (data) => {
+const generateTravelSummaryPDF = async (data) => {
   const fonts = {
     Roboto: {
       normal: "Helvetica",
@@ -17,7 +18,7 @@ const generateTravelSummaryPDF = (data) => {
   const printer = new PdfPrinter(fonts);
   const travel = data;
   const { movement, employee, expenceDetails } = travel;
-
+console.log(expenceDetails,"============================ expenceDetails =======================")
   const travelDates = {
     from: moment.utc(movement.LVFRMDT).format("MMM D, YYYY"),
     to: moment.utc(movement.LVTODT).format("MMM D, YYYY"),
@@ -174,8 +175,9 @@ const generateTravelSummaryPDF = (data) => {
       sectionHeader: { fontSize: 12, bold: true, decoration: "underline" },
     },
   };
-  const dirPath = `/home/smart/public`;
-  const filePath = path.join(dirPath, "T-17162.pdf");
+  const dirPath = path.join(__dirname,"./../public")
+  console.log(dirPath,"============== dirPath ==================")
+  const filePath = path.join(dirPath, `${travel.employee.EMPNO}-${expenceDetails[0].createdAt}.pdf`);
 
   // Check if the directory exists, create it if not
   if (!fs.existsSync(dirPath)) {
@@ -192,7 +194,7 @@ const generateTravelSummaryPDF = (data) => {
     pdfDoc.pipe(fs.createWriteStream(filePath));
     pdfDoc.end(); // Ensure PDF is properly written
     console.log("PDF created successfully:", filePath);
-    return filePath;
+    return `${baseURL}/api/public/${travel.employee.EMPNO}-${expenceDetails[0].createdAt}.pdf`;
   }
 };
 

@@ -269,7 +269,7 @@ function getLastWorkingDate() {
 // USER LOGIN MOBILE
 // ******************************************************************************************************************************************************************************
 router.post("/login", async (req, res) => {
-  const { EMPNO, PASSWORD } = req.body;
+  const { EMPNO, PASSWORD, HRAPPVERSION } = req.body;
   console.log("===========req.body", req.body);
 
   // return res.status(400).json({
@@ -344,6 +344,7 @@ router.post("/login", async (req, res) => {
     console.log("==========user.DEVICEID", user.DEVICEID);
     if (user.DEVICEID == "" || user.DEVICEID == undefined) {
       user.DEVICEID = req.body.device_id;
+
       await user.save();
       res.status(200).json({
         Status: "Success",
@@ -359,6 +360,9 @@ router.post("/login", async (req, res) => {
         Code: 404,
       });
     } else if (user.DEVICEID == req.body.device_id) {
+      // update hr app version in user table
+      user.HRAPPVERSION = req.body.HRAPPVERSION;
+      await user.save();
       res.status(200).json({
         Status: "Success",
         Message: "User authenticated successfully",
