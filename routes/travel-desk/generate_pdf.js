@@ -3,9 +3,13 @@ const PdfPrinter = require("pdfmake");
 const moment = require("moment");
 const path = require("path");
 // const data = require("./data.json");
-const baseURL = process.env.BASE_URL
+const baseURL = process.env.BASE_URL;
 
 const generateTravelSummaryPDF = async (data) => {
+  console.log(
+    data,
+    "================================== data ============================"
+  );
   const fonts = {
     Roboto: {
       normal: "Helvetica",
@@ -18,7 +22,10 @@ const generateTravelSummaryPDF = async (data) => {
   const printer = new PdfPrinter(fonts);
   const travel = data;
   const { movement, employee, expenceDetails } = travel;
-console.log(expenceDetails,"============================ expenceDetails =======================")
+  console.log(
+    expenceDetails,
+    "============================ expenceDetails ======================="
+  );
   const travelDates = {
     from: moment.utc(movement.LVFRMDT).format("MMM D, YYYY"),
     to: moment.utc(movement.LVTODT).format("MMM D, YYYY"),
@@ -84,6 +91,10 @@ console.log(expenceDetails,"============================ expenceDetails ========
   };
 
   expenceDetails.forEach((detail) => {
+    console.log(
+      detail.expenses,
+      "=============================== detail.expenses ====================="
+    );
     detail.expenses.forEach((exp) => {
       const date = exp.date;
       const formattedDate = date ? moment.utc(date).format("DD-MM-YYYY") : "-";
@@ -175,9 +186,14 @@ console.log(expenceDetails,"============================ expenceDetails ========
       sectionHeader: { fontSize: 12, bold: true, decoration: "underline" },
     },
   };
-  const dirPath = path.join(__dirname,"./../public")
-  console.log(dirPath,"============== dirPath ==================")
-  const filePath = path.join(dirPath, `${travel.employee.EMPNO}-${expenceDetails[0].createdAt}.pdf`);
+  const dirPath = path.join(__dirname, "./../public");
+  console.log(dirPath, "============== dirPath ==================");
+  const filePath = path.join(
+    dirPath,
+    `${travel.employee.EMPNO}-${moment(expenceDetails[0].createdAt).format(
+      "DD-MM-YYYY"
+    )}.pdf`
+  );
 
   // Check if the directory exists, create it if not
   if (!fs.existsSync(dirPath)) {
@@ -187,14 +203,19 @@ console.log(expenceDetails,"============================ expenceDetails ========
   // Check if the file already exists
   if (fs.existsSync(filePath)) {
     console.log("File already exists:", filePath);
-    return filePath;
+    return `https://smarthr.johnsonliftsltd.com:3001/api/public/${travel.employee.EMPNO}-${moment(
+      expenceDetails[0].createdAt
+    ).format("DD-MM-YYYY")}.pdf`;
   } else {
     // Now write the PDF
     const pdfDoc = printer.createPdfKitDocument(docDefinition);
     pdfDoc.pipe(fs.createWriteStream(filePath));
     pdfDoc.end(); // Ensure PDF is properly written
     console.log("PDF created successfully:", filePath);
-    return `${baseURL}/api/public/${travel.employee.EMPNO}-${expenceDetails[0].createdAt}.pdf`;
+    console.log(baseURL);
+    return `https://smarthr.johnsonliftsltd.com:3001/api/public/${travel.employee.EMPNO}-${moment(
+      expenceDetails[0].createdAt
+    ).format("DD-MM-YYYY")}.pdf`;
   }
 };
 
