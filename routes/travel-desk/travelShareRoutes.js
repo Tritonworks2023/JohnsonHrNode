@@ -336,7 +336,7 @@ const getGradeKey = (grade) => {
   const tGrades = ["T1", "T2", "T3", "T4", "T5", "T6"];
   if (sGrades.includes(grade)) return "S";
   if (tGrades.includes(grade)) return "T";
-  return "S";
+  return grade;
 };
 
 // const validateExpense = (city, grade, amount, type, attachments, duration) => {

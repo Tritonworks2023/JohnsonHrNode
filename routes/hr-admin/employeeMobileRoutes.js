@@ -1849,7 +1849,8 @@ router.post("/available-leaves", async (req, res) => {
     }
 
     availableLeaves["PermissionsDuration15"] = permissionsDuration15;
-    availableLeaves["PermissionsDuration60"] = permissionsDuration60;
+    availableLeaves["PermissionsDuration60"] =
+      permissionsDuration60 < 0 ? 0 : permissionsDuration60;
     availableLeaves["movementCount"] = movementCount;
 
     const employeeDetails = await EmployeeMaster.findOne({ EMPNO }).select(
