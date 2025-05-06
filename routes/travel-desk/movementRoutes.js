@@ -402,6 +402,7 @@ router.post("/apply-movement", async (req, res) => {
       DEVIATIONDESC,
       LODGINGPAIDBY,
       JOBSPECIFIC,
+      APPNAME
     } = req.body;
 
     const requiredFieldsValidation = validateRequiredFields(
@@ -581,6 +582,9 @@ router.post("/apply-movement", async (req, res) => {
     const applicationCount = (await LeaveDetail.countDocuments()) + 1;
     const LVAPNO = applicationCount;
 
+// create sequence for movement number
+
+    const timestamp = moment().format('MMYYYYHHmmss')
     let insertObj = {
       LVAPNO,
       LVYR: parsedLVFRMDT.getFullYear().toString(),
@@ -613,8 +617,10 @@ router.post("/apply-movement", async (req, res) => {
       ADVANCEAMTFLG,
       APPROVER: userExists.REPMGR,
       JOBSPECIFIC,
+      MOVEMENTID: timestamp,
       FRMSESSION, // added for DO
       TOSESSION,
+      APPNAME:APPNAME
     };
     if (LVCODE === "OS") {
       insertObj.FRMSESSION = FRMSESSION;
@@ -669,7 +675,7 @@ router.post("/my-movements-list", async (req, res) => {
         Code: 400,
       });
     }
-    const leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" });
+    const leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({ ENTRYDT: -1 });
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",

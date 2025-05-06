@@ -332,10 +332,14 @@ const getCityClassification = (city) => {
 // };
 
 const getGradeKey = (grade) => {
+  const gradeSplit = grade.split("");
+  const gradeKey = gradeSplit[0]
   const sGrades = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"];
   const tGrades = ["T1", "T2", "T3", "T4", "T5", "T6"];
+  const traineeGrades = ["A","D","I","W","F"];
   if (sGrades.includes(grade)) return "S";
   if (tGrades.includes(grade)) return "T";
+  if (traineeGrades.includes(gradeKey)) return "Trainee";
   return grade;
 };
 
@@ -532,7 +536,7 @@ const validateConveyanceExpense = (
 
   const gradeKey = getGradeKey(grade);
 
-  if (["S", "T"].includes(gradeKey)) {
+  if (["S", "T","Trainee"].includes(gradeKey)) {
     maxAmount = 100;
   } else {
     maxAmount = 200;

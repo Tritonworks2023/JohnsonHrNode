@@ -67,6 +67,8 @@ const leaveDetailSchema = new Schema({
   updatedAt: { type: Date, default: Date.now },
   LODGINGPAIDBY: String,
   JOBSPECIFIC: { type: String, default: "" },
+  MOVEMENTID: { type: String, default: "" },
+  APPNAME: { type: String, enum: ["MYTRAVEL", "HR"] }
 });
 
 leaveDetailSchema.pre("save", function (next) {
