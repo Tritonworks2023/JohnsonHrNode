@@ -402,7 +402,7 @@ router.post("/apply-movement", async (req, res) => {
       DEVIATIONDESC,
       LODGINGPAIDBY,
       JOBSPECIFIC,
-      APPNAME
+      APPNAME,
     } = req.body;
 
     const requiredFieldsValidation = validateRequiredFields(
@@ -579,12 +579,29 @@ router.post("/apply-movement", async (req, res) => {
       });
     }
 
+    // block movement if the employee is on leave
+
+    const checkLeave = await LeaveDetail.findOne({
+      EMPNO,
+      // STATUS: "APPROVED",
+      LVCODE: { $in: ["CL", "CO", "EL", "SL"] },
+      LVFRMDT: { $lte: moment(parsedLVTODT).toDate() },
+      LVTODT: { $gte: moment(parsedLVFRMDT).toDate() },
+    });
+    if (checkLeave) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message:
+          "Movement cannot be applied as the employee is on leave",
+        Code: 400,
+      });
+    }
     const applicationCount = (await LeaveDetail.countDocuments()) + 1;
     const LVAPNO = applicationCount;
 
-// create sequence for movement number
+    // create sequence for movement number
 
-    const timestamp = moment().format('MMYYYYHHmmss')
+    const timestamp = moment().format("MMYYYYHHmmss");
     let insertObj = {
       LVAPNO,
       LVYR: parsedLVFRMDT.getFullYear().toString(),
@@ -620,7 +637,7 @@ router.post("/apply-movement", async (req, res) => {
       MOVEMENTID: timestamp,
       FRMSESSION, // added for DO
       TOSESSION,
-      APPNAME:APPNAME
+      APPNAME: APPNAME,
     };
     if (LVCODE === "OS") {
       insertObj.FRMSESSION = FRMSESSION;
@@ -666,7 +683,7 @@ router.post("/apply-movement", async (req, res) => {
 
 router.post("/my-movements-list", async (req, res) => {
   try {
-    const { EMPNO } = req.body;
+    const { EMPNO, APPNAME } = req.body;
     if (!EMPNO) {
       return res.status(400).json({
         Status: "Failed",
@@ -675,7 +692,21 @@ router.post("/my-movements-list", async (req, res) => {
         Code: 400,
       });
     }
-    const leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({ ENTRYDT: -1 });
+    let leaveList;
+    if (APPNAME) {
+      leaveList = await LeaveDetail.find({
+        EMPNO,
+        TYPE: "MOVEMENT",
+        APPNAME: { $in: APPNAME },
+      }).sort({ ENTRYDT: -1 });
+    } else {
+      leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
+        ENTRYDT: -1,
+      });
+    }
+      //  leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
+      //   ENTRYDT: -1,
+      // });
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
@@ -1020,7 +1051,7 @@ async function generateTravelId() {
 // generate pdf summary for submitted claim
 router.post("/claim-summary", async (req, res) => {
   try {
-    const { movement_id, EMPNO ,endDate,startDate} = req.body;
+    const { movement_id, EMPNO, endDate, startDate } = req.body;
 
     const result = await TravelDesk.aggregate([
       {
@@ -1138,7 +1169,10 @@ router.post("/claim-summary", async (req, res) => {
       },
     ]);
 
-    console.log(result,"================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+    console.log(
+      result,
+      "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
+    );
 
     const summaryData = await generateTravelSummaryPDF(result[0]);
 
