@@ -600,7 +600,7 @@ router.post("/add-expenses", async (req, res) => {
         let checkBoardingBill = false;
 
         if (!city && +expenseDeviationData[type].amount > 0) {
-         return res.status(400).json({
+          return res.status(400).json({
             Status: "Failed",
             Message: `Please enter city`,
             Code: 400,
@@ -746,29 +746,68 @@ router.post("/add-expenses", async (req, res) => {
                   });
                 }
 
-                compAmount = (20 / 100) * carAmount;
-                if (amount > compAmount) {
-                  res.status(400).json({
-                    Status: "Failed",
-                    Message: `For car travel, you are allowed to claim only 20% . Claim amount  ${compAmount}`,
-                    Code: 400,
-                  });
+                // allow 20% + 5% of the amount for car travel
+                const isSameDate = moment(departureDate).isSame(
+                  returnDate,
+                  "day"
+                );
+
+                console.log(
+                  isSameDate,
+                  "=================== isSameDate ===================="
+                );
+                if (isSameDate) {
+                  let amountCal = (20 / 100) * carAmount;
+                  console.log(
+                    amountCal,
+                    "=================== amountCal ===================="
+                  );
+                  let gstAmount = (5 / 100) * amountCal;
+                  console.log(
+                    gstAmount,
+                    "=================== gstAmount ===================="
+                  );
+                  compAmount = Number(amountCal) + Number(gstAmount);
                 } else {
-                  if (receipt.length > 0) {
-                    isValid = validateCompositeExpense(
-                      city,
-                      grade,
-                      amount,
-                      receipt,
-                      totalDuration
-                    );
-                    isValid = true;
+                  compAmount = (50 / 100) * carAmount; // 50% of the amount for car travel
+                }
+                console.log(
+                  compAmount,
+                  "=================== compAmount ===================="
+                );
+                if (amount > compAmount) {
+                  if (isSameDate) {
+                    res.status(400).json({
+                      Status: "Failed",
+                      Message: `For car travel, you are allowed to claim only 20% . Claim amount  ${compAmount}`,
+                      Code: 400,
+                    });
                   } else {
                     res.status(400).json({
                       Status: "Failed",
-                      Message: `Upload Food Bill - Travel By Car `,
+                      Message: `For car travel, you are allowed to claim only 50% . Claim amount  ${compAmount}`,
                       Code: 400,
                     });
+                  }
+                } else {
+                  // bill only needed for singale day car
+                  if (isSameDate) {
+                    if (receipt.length > 0) {
+                      isValid = validateCompositeExpense(
+                        city,
+                        grade,
+                        amount,
+                        receipt,
+                        totalDuration
+                      );
+                      isValid = true;
+                    } else {
+                      res.status(400).json({
+                        Status: "Failed",
+                        Message: `Upload Food Bill - Travel By Car `,
+                        Code: 400,
+                      });
+                    }
                   }
                 }
                 break;

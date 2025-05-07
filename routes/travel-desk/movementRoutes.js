@@ -591,8 +591,7 @@ router.post("/apply-movement", async (req, res) => {
     if (checkLeave) {
       return res.status(400).json({
         Status: "Failed",
-        Message:
-          "Movement cannot be applied as the employee is on leave",
+        Message: "Movement cannot be applied as the employee is on leave",
         Code: 400,
       });
     }
@@ -601,7 +600,30 @@ router.post("/apply-movement", async (req, res) => {
 
     // create sequence for movement number
 
-    const timestamp = moment().format("MMYYYYHHmmss");
+    const timestamp = moment().format("MMYYYY");
+
+    const lastRecord = await LeaveDetail.findOne({}).sort({ _id: -1 });
+
+    let lastSeqNo = 0;
+
+    if (
+      lastRecord &&
+      lastRecord.MOVEMENTID &&
+      lastRecord.MOVEMENTID.toString().length >= 9
+    ) {
+      const lastId = lastRecord.MOVEMENTID.toString();
+      const lastTimestamp = lastId.slice(0, 6);
+      const lastNumber = parseInt(lastId.slice(6), 10);
+
+      if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
+        lastSeqNo = lastNumber;
+      }
+    }
+
+    // Increment and format
+    const incrementStr = (lastSeqNo + 1).toString().padStart(3, "0");
+    const uniqueCode = `${timestamp}${incrementStr}`;
+
     let insertObj = {
       LVAPNO,
       LVYR: parsedLVFRMDT.getFullYear().toString(),
@@ -634,7 +656,7 @@ router.post("/apply-movement", async (req, res) => {
       ADVANCEAMTFLG,
       APPROVER: userExists.REPMGR,
       JOBSPECIFIC,
-      MOVEMENTID: timestamp,
+      MOVEMENTID: uniqueCode,
       FRMSESSION, // added for DO
       TOSESSION,
       APPNAME: APPNAME,
@@ -704,9 +726,9 @@ router.post("/my-movements-list", async (req, res) => {
         ENTRYDT: -1,
       });
     }
-      //  leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
-      //   ENTRYDT: -1,
-      // });
+    //  leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
+    //   ENTRYDT: -1,
+    // });
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
@@ -1052,7 +1074,7 @@ async function generateTravelId() {
 router.post("/claim-summary", async (req, res) => {
   try {
     const { movement_id, EMPNO, endDate, startDate } = req.body;
-
+console.log(req.body,"=====================req.body===================");
     const result = await TravelDesk.aggregate([
       {
         $match: {
