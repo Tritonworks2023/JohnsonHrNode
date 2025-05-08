@@ -21,7 +21,7 @@ const generateTravelSummaryPDF = async (data) => {
 
   const printer = new PdfPrinter(fonts);
   const travel = data;
-  const { movement, employee, expenceDetails,tda } = travel;
+  const { movement, employee, expenceDetails, tda } = travel;
   console.log(
     expenceDetails,
     "============================ expenceDetails ======================="
@@ -91,44 +91,53 @@ const generateTravelSummaryPDF = async (data) => {
   //   );
   // };
 
+  let allExpenses = expenceDetails.flatMap((d) => d.expenses);
+  let totalRows = allExpenses.length;
+  let globalIndex = 0; // Tracks index across all expense entries
+
   expenceDetails.forEach((detail) => {
-    console.log(
-      detail.expenses,
-      "=============================== detail.expenses ====================="
-    );
     detail.expenses.forEach((exp) => {
-      // const date = new Date(exp.date).toLocaleString();
-      const formattedDate = moment(new Date(exp.date)).format('DD-MM-YYYY')
-            console.log(formattedDate, "================= formattedDate ====================");
+      const isFirstRow = globalIndex === 0;
+      const isLastRow = globalIndex === totalRows - 1;
+
+      const formattedDate = moment(new Date(exp.date)).format("DD-MM-YYYY");
+
       const travelAmt = sumAmount(exp.TRAVEL?.amount);
       const compositeAmt = exp.COMPOSITE?.amount || 0;
       const boardingAmt = exp.BOARDING?.amount || 0;
       const lodgingAmt = exp.LODGING?.amount || 0;
       const conveyanceAmt = sumAmount(exp.CONVEYANCE?.amount);
-    //  const TDAamt = getTDAByDate(date);
 
-    const TDAamt = detail.tda || 0;
-console.log(TDAamt, "================= TDAamt ====================");
+      const TDAamt = detail.tda || 0;
+
       const totalAmt =
         travelAmt +
         compositeAmt +
         boardingAmt +
-        TDAamt +
+        (isFirstRow || isLastRow ? TDAamt : 0) + // Only include in total if showing
         lodgingAmt +
         conveyanceAmt;
+
       grandTotal += totalAmt;
 
-      tableBody.push([
+      const row = [
         { text: serial++, alignment: "center", fontSize: 11 },
         { text: formattedDate, alignment: "center", fontSize: 11 },
         { text: travelAmt.toFixed(2), alignment: "center", fontSize: 11 },
         { text: compositeAmt.toFixed(2), alignment: "center", fontSize: 11 },
         { text: boardingAmt.toFixed(2), alignment: "center", fontSize: 11 },
-        { text: TDAamt.toFixed(2), alignment: "center", fontSize: 11 },
+        {
+          text: isFirstRow || isLastRow ? TDAamt.toFixed(2) : 0,
+          alignment: "center",
+          fontSize: 11,
+        },
         { text: lodgingAmt.toFixed(2), alignment: "center", fontSize: 11 },
         { text: conveyanceAmt.toFixed(2), alignment: "center", fontSize: 11 },
         { text: totalAmt.toFixed(2), alignment: "center", fontSize: 11 },
-      ]);
+      ];
+
+      tableBody.push(row);
+      globalIndex++;
     });
   });
 
@@ -202,7 +211,7 @@ console.log(TDAamt, "================= TDAamt ====================");
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true }); // recursive: true ensures parent directories are created if needed
   }
-
+  /*
   // Check if the file already exists
   if (fs.existsSync(filePath)) {
     console.log("File already exists:", filePath);
@@ -220,6 +229,16 @@ console.log(TDAamt, "================= TDAamt ====================");
       expenceDetails[0].createdAt
     ).format("DD-MM-YYYY")}.pdf`;
   }
+*/
+  // Now write the PDF
+  const pdfDoc = printer.createPdfKitDocument(docDefinition);
+  pdfDoc.pipe(fs.createWriteStream(filePath));
+  pdfDoc.end(); // Ensure PDF is properly written
+  console.log("PDF created successfully:", filePath);
+  console.log(baseURL);
+  return `https://smarthr.johnsonliftsltd.com:3001/api/public/${
+    travel.employee.EMPNO
+  }-${moment(expenceDetails[0].createdAt).format("DD-MM-YYYY")}.pdf`;
 };
 
 module.exports = { generateTravelSummaryPDF };
