@@ -21,7 +21,7 @@ const generateTravelSummaryPDF = async (data) => {
 
   const printer = new PdfPrinter(fonts);
   const travel = data;
-  const { movement, employee, expenceDetails } = travel;
+  const { movement, employee, expenceDetails,tda } = travel;
   console.log(
     expenceDetails,
     "============================ expenceDetails ======================="
@@ -72,24 +72,24 @@ const generateTravelSummaryPDF = async (data) => {
       ? arr.reduce((sum, item) => sum + (item?.amount || 0), 0)
       : 0;
 
-  const getTDAByDate = (date) => {
-    const targetDate = moment.utc(date).startOf("day");
-    const detail = expenceDetails.find((ed) =>
-      ed.expenses.some((exp) =>
-        moment.utc(exp.date).startOf("day").isSame(targetDate)
-      )
-    );
+  // const getTDAByDate = (date) => {
+  //   const targetDate = moment.utc(date).startOf("day");
+  //   const detail = expenceDetails.find((ed) =>
+  //     ed.expenses.some((exp) =>
+  //       moment.utc(exp.date).startOf("day").isSame(targetDate)
+  //     )
+  //   );
 
-    if (!detail || !detail.expenseDeviationTDA) return 0;
+  //   if (!detail || !detail.expenseDeviationTDA) return 0;
 
-    const tdaEntry = detail.expenseDeviationTDA.find((tda) =>
-      moment.utc(tda.date).startOf("day").isSame(targetDate)
-    );
+  //   const tdaEntry = detail.expenseDeviationTDA.find((tda) =>
+  //     moment.utc(tda.date).startOf("day").isSame(targetDate)
+  //   );
 
-    return (
-      (tdaEntry?.COMPOSITE?.amount || 0) + (tdaEntry?.BOARDING?.amount || 0)
-    );
-  };
+  //   return (
+  //     (tdaEntry?.COMPOSITE?.amount || 0) + (tdaEntry?.BOARDING?.amount || 0)
+  //   );
+  // };
 
   expenceDetails.forEach((detail) => {
     console.log(
@@ -97,16 +97,18 @@ const generateTravelSummaryPDF = async (data) => {
       "=============================== detail.expenses ====================="
     );
     detail.expenses.forEach((exp) => {
-      const date = exp.date;
-      const formattedDate = date ? moment.utc(date).format("DD-MM-YYYY") : "-";
-
+      // const date = new Date(exp.date).toLocaleString();
+      const formattedDate = moment(new Date(exp.date)).format('DD-MM-YYYY')
+            console.log(formattedDate, "================= formattedDate ====================");
       const travelAmt = sumAmount(exp.TRAVEL?.amount);
       const compositeAmt = exp.COMPOSITE?.amount || 0;
       const boardingAmt = exp.BOARDING?.amount || 0;
       const lodgingAmt = exp.LODGING?.amount || 0;
       const conveyanceAmt = sumAmount(exp.CONVEYANCE?.amount);
-      const TDAamt = getTDAByDate(date);
+    //  const TDAamt = getTDAByDate(date);
 
+    const TDAamt = detail.tda || 0;
+console.log(TDAamt, "================= TDAamt ====================");
       const totalAmt =
         travelAmt +
         compositeAmt +

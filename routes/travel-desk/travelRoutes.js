@@ -1064,6 +1064,22 @@ router.post("/add-expenses", async (req, res) => {
           "===================== finalApproval ==================="
         );
 
+        // added for TDA calculation based on travel time
+        let tda = 0;
+        if (
+          travelDesk.movement.TRAVELTIME > 6 &&
+          travelDesk.movement.TRAVELTIME <= 15
+        ) {
+          tda = 150;
+        } else if (
+          travelDesk.movement.TRAVELTIME > 15 &&
+          travelDesk.movement.TRAVELTIME <= 24
+        ) {
+          tda = 250;
+        } else if (travelDesk.movement.TRAVELTIME > 24) {
+          tda = 400;
+        }
+        console.log(tda, "===================== tda ===================");
         const newExpense = new Expense({
           travelId,
           totalAmount,
@@ -1071,6 +1087,7 @@ router.post("/add-expenses", async (req, res) => {
           expenseDeviationTDA: validTDAExpenses,
           firstApproval,
           finalApproval,
+          tda: tda,
         });
         await newExpense.save();
         res.json({

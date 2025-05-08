@@ -602,7 +602,7 @@ router.post("/apply-movement", async (req, res) => {
 
     const timestamp = moment().format("MMYYYY");
 
-    const lastRecord = await LeaveDetail.findOne({}).sort({ _id: -1 });
+    const lastRecord = await LeaveDetail.findOne({TYPE:"MOVEMENT",LVCODE:"OS"}).sort({ _id: -1 });
 
     let lastSeqNo = 0;
 
@@ -659,7 +659,7 @@ router.post("/apply-movement", async (req, res) => {
       MOVEMENTID: uniqueCode,
       FRMSESSION, // added for DO
       TOSESSION,
-      APPNAME: APPNAME,
+      APPNAME: APPNAME
     };
     if (LVCODE === "OS") {
       insertObj.FRMSESSION = FRMSESSION;
