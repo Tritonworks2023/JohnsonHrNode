@@ -2976,16 +2976,18 @@ router.post("/compensatoryOffAction", async (req, res) => {
       PA_ELSTD_LVYR: year,
     });
 
-    const count = Number(dbCount.PA_ELSTD_BAL) + Number(addcount);
+    if (dbCount) {
+      const count = Number(dbCount.PA_ELSTD_BAL) + Number(addcount);
 
-    await BalanceLeave.findOneAndUpdate(
-      {
-        PA_ELSTD_EMPNO: compensatoryOffEntry.EMPNO,
-        PA_ELSTD_LVCODE: "CO",
-        PA_ELSTD_LVYR: year,
-      },
-      { $set: { PA_ELSTD_BAL: count } }
-    );
+      await BalanceLeave.findOneAndUpdate(
+        {
+          PA_ELSTD_EMPNO: compensatoryOffEntry.EMPNO,
+          PA_ELSTD_LVCODE: "CO",
+          PA_ELSTD_LVYR: year,
+        },
+        { $set: { PA_ELSTD_BAL: count } }
+      );
+    }
 
     res.json({
       Status: "Success",
