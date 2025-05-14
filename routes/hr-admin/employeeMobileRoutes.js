@@ -1491,151 +1491,23 @@ router.post("/create-attendance", async (req, res) => {
         },
       });
 
-      /* 
-      if (hours === 2 && !existingApprovedPermissions.DURATION === "120") {
-        if (permissionsDuration60 === 2) {
-          for (let i = 1; i <= 2; i++) {
-            newPermission.DURATION = "60";
-            // Save the new permission request
-            createPermission(newPermission);
-          }
-        } else if (permissionsDuration60 === 1) {
-          newPermission.DURATION = "60";
-          // Save the new permission request
-          createPermission(newPermission);
-        } else {
-          const balanceEL = await BalanceLeave.findOne({
-            PA_ELSTD_LVYR: newAttendance.LVDT.getFullYear().toString(),
-            PA_ELSTD_LVCODE: "EL",
-          });
-          const balanceCL = await BalanceLeave.findOne({
-            PA_ELSTD_LVYR: newAttendance.LVDT.getFullYear().toString(),
-            PA_ELSTD_LVCODE: "CL",
-          });
-          if (balanceEL?.PA_ELSTD_BAL > 0) {
-            // CHECK IF EL AVAILABLE
-            const applicationCount = (await LeaveDetail.countDocuments()) + 1;
-            leavePayload.LVAPNO = applicationCount;
-            (leavePayload.ISESLVCODE = "EL"),
-              (leavePayload.IISESLVCODE = "EL"),
-              (leavePayload.LVCODE = "EL"),
-              createLeave(leavePayload); // CHANGE IF NEEDED USING APPLY LEAVE API USING AXIOS
-            await BalanceLeave.findOneAndUpdate({
-              PA_ELSTD_EMPNO,
-              PA_ELSTD_LVYR: newAttendance.LVDT.getFullYear().toString(),
-              PA_ELSTD_LVCODE: "EL",
-              PA_ELSTD_BAL: balanceEL.PA_ELSTD_BAL - 1,
-            });
-          }
-          //  else if (
-          //   // CHECK IF CL AVAILABLE
-          //   balanceEL.PA_ELSTD_BAL === 0 &&
-          //   balanceCL.PA_ELSTD_BAL > 0
-          // ) {
-          //   const existingAttendanceMaster = await LeaveAttendanceMaster.findOne({
-          //     EMPNO,
-          //     BRCODE,
-          // });
-          // if (existingAttendanceMaster) {
-          //     const existingRecord = existingAttendanceMaster.attendanceRecords.find(record => moment(record.LVDT).isSame(currentDate, 'day'));
-          //     //console.log("==========existingRecord",existingRecord);
-          //     if (!existingRecord) {
-          //         existingAttendanceMaster.attendanceRecords.push({
-          //             LVAPNO: 99999999,
-          //             LVYR: moment(LVDT).format('YYYY'),
-          //             LVDT,
-          //             EMPNO,
-          //             EMPNAME: ENAME,
-          //             BRCODE,
-          //             BRSTARTTIME: branchRecord.BRSTARTTIME,
-          //             BRENDTIME: branchRecord.BRENDTIME,
-          //             ISESLVCODE,
-          //             IISESLVCODE,
-          //             LVCODE,
-          //             ENTRYBY: '',
-          //             ENTRYDT: LVDT,
-          //             MODBY: '',
-          //             MODDT: LVDT,
-          //             SOURCE: 'JLSMART-AUTOLOGOUT',
-          //             TYPE: 'ATTENDANCE'
-          //         });
-          //         await existingAttendanceMaster.save();
-          //     }
-          // } else {
-          //     const newAttendanceMaster = new LeaveAttendanceMaster({
-          //         EMPNO,
-          //         EMPID: userExists._id,
-          //         GRADE:userExists.GRADE,
-          //         DEPT:userExists.DEPT,
-          //         BRCODE,
-          //         attendanceRecords: [{
-          //             LVAPNO: 99999999,
-          //             LVYR: moment(LVDT).format('YYYY'),
-          //             LVDT,
-          //             EMPNO,
-          //             EMPNAME: ENAME,
-          //             BRCODE,
-          //             BRSTARTTIME: branchRecord.BRSTARTTIME,
-          //             BRENDTIME: branchRecord.BRENDTIME,
-          //             ISESLVCODE,
-          //             IISESLVCODE,
-          //             LVCODE:"LOP",
-          //             ENTRYBY: '',
-          //             ENTRYDT: LVDT,
-          //             MODBY: '',
-          //             MODDT: LVDT,
-          //             SOURCE: 'JLSMART-AUTOLOGOUT',
-          //             TYPE: 'ATTENDANCE'
-          //         }]
-          //     });
-          //     await newAttendanceMaster.save();
-          // }
-          // }
-        }
-      } else if (
-        hours > 1 &&
-        hours < 2 &&
-        !existingApprovedPermissions.DURATION === "120"
-      ) {
-        newPermission.DURATION = "120";
-        createPermission(newPermission);
-      } else if (
-        hours === 0 &&
-        !existingApprovedPermissions.DURATION === "15" &&
-        minutes > 15 &&
-        minutes <= 30
-      ) {
-        newPermission.DURATION = "15";
-        createPermission(newPermission);
-      } else if (
-        hours === 0 &&
-        minutes > 30 &&
-        minutes <= 45 &&
-        !existingApprovedPermissions.DURATION === "15"
-      ) {
-        for (let i = 1; i <= 2; i++) {
-          newPermission.DURATION = "15";
-          // Save the new permission request
-          createPermission(newPermission);
-        }
-      } else if (
-        hours === 0 &&
-        minutes > 45 &&
-        minutes <= 60 &&
-        !existingApprovedPermissions.DURATION === "15"
-      ) {
-        for (let i = 1; i <= 3; i++) {
-          newPermission.DURATION = "15";
-          // Save the new permission request
-          createPermission(newPermission);
-        }
-      }
-*/
+      // check if OD already approved. If approved should not auto deduct
+
+      const existingApprovedOD = await LeaveDetail.find({
+        EMPNO,
+        STATUS: "APPROVED",
+        LVFRMDT: {
+          $gte: new Date(startOfDay),
+          $lte: new Date(endOfDay),
+        },
+      });
+
       // auto deduct permission based of approved permissions
       if (
         hours > 1 &&
         hours <= 2 &&
         !existingApprovedPermissions &&
+        !existingApprovedOD &&
         existingApprovedPermissions.DURATION !== "120" &&
         attendanceType === "CHECKIN"
       ) {
@@ -1645,6 +1517,7 @@ router.post("/create-attendance", async (req, res) => {
         minutes > 15 &&
         minutes <= 59 &&
         !existingApprovedPermissions &&
+        !existingApprovedOD &&
         existingApprovedPermissions.DURATION !== "60" &&
         attendanceType === "CHECKIN"
       ) {
@@ -1654,6 +1527,7 @@ router.post("/create-attendance", async (req, res) => {
         minutes > 5 &&
         minutes <= 15 &&
         !existingApprovedPermissions &&
+        !existingApprovedOD &&
         existingApprovedPermissions.DURATION !== "15" &&
         attendanceType === "CHECKIN"
       ) {
@@ -2870,6 +2744,22 @@ router.post("/leave-permission-action", async (req, res) => {
       request.LVSANCDT = today;
       request.MODBY = EMPLOYEE_ID || "";
       request.MODDT = today;
+    }
+
+    // revoke permissions for OD
+    if (request.LVCODE === "DO") {
+      const findPermissons = await Permission.findOne({
+        EMPNO: request.EMPNO,
+        STATUS: "APPROVED",
+        PERMISSIONDATE: {
+          $gte: moment(request.LVFRMDT).startOf("day").toDate(),
+          $lte: moment(request.LVTODT).endOf("day").toDate(),
+        },
+      });
+      console.log("========findPermissons", findPermissons);
+      if (findPermissons) {
+        await Permission.deleteOne({ _id: findPermissons._id });
+      }
     }
 
     // Save the updated request

@@ -24,6 +24,7 @@ const Holiday = require("../../models/holidayModel");
 const { TravelDesk } = require("../../models/travelDeskModel");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
+const Permission = require("../../models/permissionModel");
 //    'E3': { mode: 'Car', class: ['Car', 'III AC', 'CC', 'AC Bus'], conveyance: 'Taxi/Auto', remarks: 'By Car if travel is more than 16 hrs' },
 //    'E7': { mode: 'Car', class: ['Car', 'II/III AC', 'CC', 'AC Bus'], conveyance: 'Taxi', remarks: 'By Car if travel is more than 10 hrs' },
 //    'E6': { mode: 'Car', class: ['Car', 'II/III AC', 'CC', 'AC Bus'], conveyance: 'Taxi', remarks: 'By Car if travel is more than 10 hrs' },
@@ -451,6 +452,22 @@ router.post("/apply-movement", async (req, res) => {
         Code: 400,
       });
     }
+
+    // can't apply movement for more than 90 days
+
+    const ninetyDaysAgo = moment().subtract(90, "days");
+
+    if (moment(LVFRMDT, "DD-MM-YYYY").isBefore(ninetyDaysAgo)) {
+      console.log("Date is older than 90 days.");
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Cant Apply Movement for more than 90 days",
+        Code: 400,
+      });
+    } else {
+      console.log("Date is within the last 90 days.");
+    }
+
     let DEVIATIONDATA = {};
     let travelTimeInHours = 0;
     if (LVCODE === "OS") {
@@ -600,16 +617,19 @@ router.post("/apply-movement", async (req, res) => {
 
     // create sequence for movement number
 
-    const timestamp = moment().format("MMYYYY");
+    const timestamp = moment().format("YYYYMM");
 
-    const lastRecord = await LeaveDetail.findOne({TYPE:"MOVEMENT",LVCODE:"OS"}).sort({ _id: -1 });
+    const lastRecord = await LeaveDetail.findOne({
+      TYPE: "MOVEMENT",
+      LVCODE: "OS",
+    }).sort({ _id: -1 });
 
     let lastSeqNo = 0;
 
     if (
       lastRecord &&
       lastRecord.MOVEMENTID &&
-      lastRecord.MOVEMENTID.toString().length >= 9
+      lastRecord.MOVEMENTID.toString().length >= 10
     ) {
       const lastId = lastRecord.MOVEMENTID.toString();
       const lastTimestamp = lastId.slice(0, 6);
@@ -621,7 +641,7 @@ router.post("/apply-movement", async (req, res) => {
     }
 
     // Increment and format
-    const incrementStr = (lastSeqNo + 1).toString().padStart(3, "0");
+    const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
     const uniqueCode = `${timestamp}${incrementStr}`;
 
     let insertObj = {
@@ -659,7 +679,7 @@ router.post("/apply-movement", async (req, res) => {
       MOVEMENTID: uniqueCode,
       FRMSESSION, // added for DO
       TOSESSION,
-      APPNAME: APPNAME
+      APPNAME: APPNAME,
     };
     if (LVCODE === "OS") {
       insertObj.FRMSESSION = FRMSESSION;
@@ -679,6 +699,7 @@ router.post("/apply-movement", async (req, res) => {
       insertObj.DEVIATIONDATA = DEVIATIONDATA;
       insertObj.LODGINGPAIDBY = LODGINGPAIDBY;
     }
+
     const newLeave = new LeaveDetail(insertObj);
     await newLeave.save();
     const notificationData = {
@@ -1074,7 +1095,7 @@ async function generateTravelId() {
 router.post("/claim-summary", async (req, res) => {
   try {
     const { movement_id, EMPNO, endDate, startDate } = req.body;
-console.log(req.body,"=====================req.body===================");
+    console.log(req.body, "=====================req.body===================");
     const result = await TravelDesk.aggregate([
       {
         $match: {
