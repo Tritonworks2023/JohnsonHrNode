@@ -105,7 +105,7 @@ const ExpenseSchema = new mongoose.Schema({
           br_no: { type: String },
           date: { type: Date },
           bill_amount: { type: Number },
-          hsn_sac_code: { type: String, required: true, maxlength: 10 },
+          hsn_sac_code: { type: String, maxlength: 10 },
           taxable_amount: { type: Number },
           sgst_percent: { type: Number },
           cgst_percent: { type: Number },
