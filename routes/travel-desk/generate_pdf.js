@@ -198,13 +198,18 @@ const generateTravelSummaryPDF = async (data) => {
       sectionHeader: { fontSize: 12, bold: true, decoration: "underline" },
     },
   };
-  const dirPath = path.join(__dirname, "./../public");
+  const dirPath = path.join(
+    __dirname,
+    "./../public",
+    `${travel.employee.EMPNO}`,
+    `${movement.MOVEMENTID}`
+  );
   console.log(dirPath, "============== dirPath ==================");
   const filePath = path.join(
     dirPath,
-    `${travel.employee.EMPNO}-${moment(expenceDetails[0].createdAt).format(
-      "DD-MM-YYYY"
-    )}.pdf`
+    `${travel.employee.EMPNO}-${movement.MOVEMENTID}-${moment(
+      expenceDetails[0].createdAt
+    ).format("DD-MM-YYYY")}.pdf`
   );
 
   // Check if the directory exists, create it if not
@@ -238,6 +243,8 @@ const generateTravelSummaryPDF = async (data) => {
   console.log(baseURL);
   return `https://smarthr.johnsonliftsltd.com:3001/api/public/${
     travel.employee.EMPNO
+  }/${movement.MOVEMENTID}/${travel.employee.EMPNO}-${
+    movement.MOVEMENTID
   }-${moment(expenceDetails[0].createdAt).format("DD-MM-YYYY")}.pdf`;
 };
 
