@@ -520,6 +520,11 @@ router.post("/add-expenses", async (req, res) => {
       isLastDate,
     } = req.body;
 
+    console.log(
+      req.body.expenseDeviationData,
+      "======================== req.body.expenseDeviationData ==========================="
+    );
+
     // Validate required fields
     if (!date || !travelId) {
       return res.status(400).json({
@@ -581,6 +586,7 @@ router.post("/add-expenses", async (req, res) => {
         toLoc: "",
         description: "",
         city: "",
+        // gst: false,
       };
     });
 
@@ -589,7 +595,7 @@ router.post("/add-expenses", async (req, res) => {
 
     for (const [type, expenseData] of Object.entries(expenseDeviationData)) {
       if (expenseData) {
-        let { amount, fromLoc, toLoc, description, city, amountDetails } =
+        let { amount, fromLoc, toLoc, description, city, amountDetails, gst } =
           expenseData;
         const receipt = imageData[`${type.toLowerCase()}Receipt`] || [];
         let isValid = false;
@@ -922,6 +928,11 @@ router.post("/add-expenses", async (req, res) => {
           });
         }
 
+        console.log(
+          type,
+          "============================ type ==========================="
+        );
+
         if (type === "CONVEYANCE" || type === "TRAVEL") {
           if (amountDetails && amountDetails.length > 0) {
             for (const amtDetails of amountDetails) {
@@ -947,6 +958,7 @@ router.post("/add-expenses", async (req, res) => {
             validExpenses[type].toLoc = toLoc;
             validExpenses[type].description = description;
             validExpenses[type].city = city;
+            validExpenses[type].gst = gst; // added gst on 02-06-2025
           }
         }
 
