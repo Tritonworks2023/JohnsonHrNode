@@ -200,7 +200,7 @@ const generateTravelSummaryPDF = async (data) => {
   };
   const dirPath = path.join(
     __dirname,
-    "./../public",
+    "./../public/FINANCEDOCS",
     `${travel.employee.EMPNO}`,
     `${movement.MOVEMENTID}`
   );
@@ -241,7 +241,7 @@ const generateTravelSummaryPDF = async (data) => {
   pdfDoc.end(); // Ensure PDF is properly written
   console.log("PDF created successfully:", filePath);
   console.log(baseURL);
-  return `https://smarthr.johnsonliftsltd.com:3001/api/public/${
+  return `https://smarthr.johnsonliftsltd.com:3001/api/public/FINANCEDOCS/${
     travel.employee.EMPNO
   }/${movement.MOVEMENTID}/${travel.employee.EMPNO}-${
     movement.MOVEMENTID
