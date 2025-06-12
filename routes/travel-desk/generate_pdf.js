@@ -27,8 +27,8 @@ const generateTravelSummaryPDF = async (data) => {
     "============================ expenceDetails ======================="
   );
   const travelDates = {
-    from: moment.utc(movement.LVFRMDT).format("MMM D, YYYY"),
-    to: moment.utc(movement.LVTODT).format("MMM D, YYYY"),
+    from: moment(movement.LVFRMDT).format("DD-MM-YYYY"),
+    to: moment(movement.LVTODT).format("DD-MM-YYYY"),
   };
 
   const header = [
