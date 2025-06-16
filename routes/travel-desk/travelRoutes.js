@@ -1080,15 +1080,20 @@ router.post("/add-expenses", async (req, res) => {
         let tda = 0;
         if (
           travelDesk.movement.TRAVELTIME > 6 &&
-          travelDesk.movement.TRAVELTIME <= 15
+          travelDesk.movement.TRAVELTIME <= 15 &&
+          (isFirstDate || isLastDate)
         ) {
           tda = 150;
         } else if (
           travelDesk.movement.TRAVELTIME > 15 &&
-          travelDesk.movement.TRAVELTIME <= 24
+          travelDesk.movement.TRAVELTIME <= 24 &&
+          (isFirstDate || isLastDate)
         ) {
           tda = 250;
-        } else if (travelDesk.movement.TRAVELTIME > 24) {
+        } else if (
+          travelDesk.movement.TRAVELTIME > 24 &&
+          (isFirstDate || isLastDate)
+        ) {
           tda = 400;
         }
         console.log(tda, "===================== tda ===================");
