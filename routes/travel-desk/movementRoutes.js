@@ -339,7 +339,7 @@ router.use(formatDateMiddleware);
 //     }
 // });
 
-const getTravelTime = async (fromLat, fromLng, toLat, toLng) => {
+const getTravelTime = async (fromLat, fromLng, toLat, toLng, transit_mode) => {
   try {
     const response = await axios.get(
       `https://maps.googleapis.com/maps/api/distancematrix/json`,
@@ -347,6 +347,8 @@ const getTravelTime = async (fromLat, fromLng, toLat, toLng) => {
         params: {
           origins: `${fromLat},${fromLng}`,
           destinations: `${toLat},${toLng}`,
+          mode: "transit",
+          transit_mode: transit_mode.toLowerCase(),
           key: googleMapKey,
         },
       }
@@ -480,7 +482,13 @@ router.post("/apply-movement", async (req, res) => {
         TOLOCLNG
       );
       travelTimeInHours = (
-        await getTravelTime(FROMLOCLAT, FROMLOCLNG, TOLOCLAT, TOLOCLNG)
+        await getTravelTime(
+          FROMLOCLAT,
+          FROMLOCLNG,
+          TOLOCLAT,
+          TOLOCLNG,
+          JOURNEYMODE
+        )
       ).toFixed(2);
       console.log("========travelTimeInHours", travelTimeInHours);
       const gradeEligibility =
@@ -727,6 +735,7 @@ router.post("/apply-movement", async (req, res) => {
 router.post("/my-movements-list", async (req, res) => {
   try {
     const { EMPNO, APPNAME } = req.body;
+    console.log(req.body, "========req.body my-movements-list");
     if (!EMPNO) {
       return res.status(400).json({
         Status: "Failed",
