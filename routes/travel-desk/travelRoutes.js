@@ -518,6 +518,7 @@ router.post("/add-expenses", async (req, res) => {
       compositeHasValue,
       isFirstDate,
       isLastDate,
+      tda
     } = req.body;
 
     console.log(
@@ -1077,7 +1078,8 @@ router.post("/add-expenses", async (req, res) => {
         );
 
         // added for TDA calculation based on travel time
-        let tda = 0;
+        // let tda = 0;
+        /*
         if (
           travelDesk.movement.TRAVELTIME > 6 &&
           travelDesk.movement.TRAVELTIME <= 15 &&
@@ -1096,7 +1098,8 @@ router.post("/add-expenses", async (req, res) => {
         ) {
           tda = 400;
         }
-        console.log(tda, "===================== tda ===================");
+          */
+        // console.log(tda, "===================== tda ===================");
         const newExpense = new Expense({
           travelId,
           totalAmount,
@@ -1465,6 +1468,7 @@ router.post("/expense-listby-travel", async (req, res) => {
         travelId: 1,
         firstApproval: 1,
         finalApproval: 1,
+        tda:1
       }
     );
 
@@ -1536,6 +1540,7 @@ router.post("/expense-listby-travel", async (req, res) => {
       expenseDeviationTDA: expenseTdaData,
       firstApproval: expenseData[0].firstApproval,
       finalApproval: expenseData[0].finalApproval,
+      tda: expenseData[0].tda,
     };
 
     console.log("=====expenseData", expenseData);
