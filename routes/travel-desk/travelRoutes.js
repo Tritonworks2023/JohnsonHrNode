@@ -1058,6 +1058,7 @@ router.post("/add-expenses", async (req, res) => {
               //   : [],
               firstApproval,
               finalApproval,
+              tda: tda,
             },
           }
         );
@@ -1517,20 +1518,21 @@ router.post("/expense-listby-travel", async (req, res) => {
     const expenseTdaData = [];
     let totalAmountOfexp = 0;
     for (const element of expenseData) {
-      totalAmountOfexp = totalAmountOfexp + element.totalAmount;
+      totalAmountOfexp = totalAmountOfexp + element.totalAmount + element.tda;
       //Combing the expenseData into into single array
       for (const exp of element.expenses) {
         console.log(
           element.expenses,
           "================================= element.expenses"
         );
+        exp.tda = element.tda;
         expensesData.push(exp);
       }
       //Combing the expenseDeviationTDA into into single array
       for (const exptd of element.expenseDeviationTDA) {
         expenseTdaData.push(exptd);
       }
-    }
+    } 
 
     const obj = {
       _id: expenseData[0]._id,
@@ -1539,8 +1541,7 @@ router.post("/expense-listby-travel", async (req, res) => {
       expenses: expensesData,
       expenseDeviationTDA: expenseTdaData,
       firstApproval: expenseData[0].firstApproval,
-      finalApproval: expenseData[0].finalApproval,
-      tda: expenseData[0].tda,
+      finalApproval: expenseData[0].finalApproval
     };
 
     console.log("=====expenseData", expenseData);
