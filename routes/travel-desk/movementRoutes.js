@@ -347,8 +347,8 @@ const getTravelTime = async (fromLat, fromLng, toLat, toLng, transit_mode) => {
         params: {
           origins: `${fromLat},${fromLng}`,
           destinations: `${toLat},${toLng}`,
-          mode: "transit",
-          transit_mode: transit_mode.toLowerCase(),
+          // mode: "transit",
+          // transit_mode: transit_mode.toLowerCase(),
           key: googleMapKey,
         },
       }
@@ -407,6 +407,15 @@ router.post("/apply-movement", async (req, res) => {
       JOBSPECIFIC,
       APPNAME,
     } = req.body;
+
+    if (APPNAME !== "MYTRAVEL" && LVCODE === "OS") {
+      return res.status(200).json({
+        Status: "Success",
+        Message: "Movement applied successfully",
+        Data: {},
+        Code: 200,
+      });
+    }
 
     const requiredFieldsValidation = validateRequiredFields(
       LVFRMDT,
