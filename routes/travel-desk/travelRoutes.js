@@ -518,7 +518,7 @@ router.post("/add-expenses", async (req, res) => {
       compositeHasValue,
       isFirstDate,
       isLastDate,
-      tda
+      tda,
     } = req.body;
 
     console.log(
@@ -531,6 +531,27 @@ router.post("/add-expenses", async (req, res) => {
       return res.status(400).json({
         Status: "Failed",
         Message: "Date and Travel ID are required",
+        Code: 400,
+      });
+    }
+    console.log(
+      "========================date===========================",
+      date
+    );
+    const convertDate = moment(date, "DD-MM-YYYY");
+    console.log(
+      "========================convertDate===========================",
+      convertDate
+    );
+    const isAfterToday = convertDate.isAfter(moment());
+    console.log(
+      "========================isAfterToday===========================",
+      isAfterToday
+    );
+    if (isAfterToday) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Cant Apply Claim For Future Date",
         Code: 400,
       });
     }
@@ -1469,7 +1490,7 @@ router.post("/expense-listby-travel", async (req, res) => {
         travelId: 1,
         firstApproval: 1,
         finalApproval: 1,
-        tda:1
+        tda: 1,
       }
     );
 
@@ -1532,7 +1553,7 @@ router.post("/expense-listby-travel", async (req, res) => {
       for (const exptd of element.expenseDeviationTDA) {
         expenseTdaData.push(exptd);
       }
-    } 
+    }
 
     const obj = {
       _id: expenseData[0]._id,
@@ -1541,7 +1562,7 @@ router.post("/expense-listby-travel", async (req, res) => {
       expenses: expensesData,
       expenseDeviationTDA: expenseTdaData,
       firstApproval: expenseData[0].firstApproval,
-      finalApproval: expenseData[0].finalApproval
+      finalApproval: expenseData[0].finalApproval,
     };
 
     console.log("=====expenseData", expenseData);
