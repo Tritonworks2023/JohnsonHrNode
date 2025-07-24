@@ -597,6 +597,8 @@ router.post("/apply-movement", async (req, res) => {
       });
     }
 
+    // modified condition to apply OD in finance app even it applied in HR app 24-07-2025 by SP
+
     const existingLeave = await LeaveDetail.findOne({
       EMPNO,
       STATUS: "APPROVED",
@@ -604,7 +606,8 @@ router.post("/apply-movement", async (req, res) => {
       LVTODT: { $gte: moment(parsedLVFRMDT).toDate() },
     });
 
-    if (existingLeave) {
+    if (existingLeave && APPNAME === "MYTRAVEL") {
+      // ADDED THIS ON 24-07-2025 BY SP AS PER SUTHIR INSTRUCTION
       return res.status(400).json({
         Status: "Failed",
         Message:
