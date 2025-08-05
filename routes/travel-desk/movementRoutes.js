@@ -1142,18 +1142,18 @@ router.post("/claim-summary", async (req, res) => {
         $match:
           endDate && startDate
             ? {
-                "expenceDetails.firstApproval.status": "PENDING",
-                "expenceDetails.finalApproval.status": "PENDING",
-                "expenceDetails.amountSettled.status": "PENDING",
+                // "expenceDetails.firstApproval.status": "PENDING",  removed on 05-08-2025 to get claim summary for approved claims
+                // "expenceDetails.finalApproval.status": "PENDING",
+                // "expenceDetails.amountSettled.status": "PENDING",
                 "expenceDetails.createdAt": {
                   $gte: new Date(startDate),
                   $lte: new Date(endDate),
                 },
               }
             : {
-                "expenceDetails.firstApproval.status": "PENDING",
-                "expenceDetails.finalApproval.status": "PENDING",
-                "expenceDetails.amountSettled.status": "PENDING",
+                // "expenceDetails.firstApproval.status": "PENDING",
+                // "expenceDetails.finalApproval.status": "PENDING",
+                // "expenceDetails.amountSettled.status": "PENDING",
               },
       },
       {
