@@ -1245,6 +1245,7 @@ router.post("/claim-summary", async (req, res) => {
       Message: "Summary Retrived",
       Code: 200,
       Data: summaryData,
+      result: result[0],
     });
   } catch (error) {
     console.error("Error retrieving claim:", error);

@@ -128,8 +128,8 @@ function isWithinRadius(lat, lng, brlat, brlng, radius = 50) {
 router.post('/create-tracking', async (req, res) => {
     try {
         const { EMPNO, ENAME, REPMGR, REPHR, LATITUDE, LONGITUDE, ADDRESS, ACTIVITY, BRCODE } = req.body;
-        console.log("==create-tracking=============ENAME",ENAME)
-        console.log("==create-tracking=============EMPNO",EMPNO)
+        // console.log("==create-tracking=============ENAME",ENAME)
+        // console.log("==create-tracking=============EMPNO",EMPNO)
         if (!EMPNO || !LATITUDE || !LONGITUDE || !ADDRESS || !BRCODE || !ENAME) {
             return res.status(400).json({ Status: 'Failed', Message: 'EMPNO, LATITUDE, LONGITUDE, and ADDRESS are required fields' });
         }
@@ -431,8 +431,8 @@ router.post("/create-Live-tracking", async (req, res) => {
         ACTIVITY,
         BRCODE,
       } = req.body;
-      console.log("==create-tracking=============ENAME", ENAME);
-      console.log("==create-tracking=============EMPNO", EMPNO);
+    //   console.log("==create-tracking=============ENAME", ENAME);
+    //   console.log("==create-tracking=============EMPNO", EMPNO);
       if (!EMPNO || !LATITUDE || !LONGITUDE || !ADDRESS || !BRCODE || !ENAME) {
         return res
           .status(400)
