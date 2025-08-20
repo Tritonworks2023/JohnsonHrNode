@@ -35,6 +35,7 @@ const generateTravelSummaryPDF = async (data) => {
     const header = [
       { text: `SEQ NO: ${movement.MOVEMENTID}` },
       { text: `EMP NO: ${employee.EMPNO}` },
+      { text: `EMP GRADE: ${employee.GRADE}` },
       { text: `Branch Code: ${employee.BRCODE}` },
       { text: `EMP Name: ${employee.ENAME}` },
       { text: `From Date: ${travelDates.from}` },
