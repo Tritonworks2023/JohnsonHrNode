@@ -407,7 +407,7 @@ const generateTravelDetailSummaryPDF = async (data) => {
 
   const filename = `${employee.EMPNO}-${movement.MOVEMENTID}-${moment().format(
     "DD-MM-YYYY"
-  )}.pdf`;
+  )}(1).pdf`;
   const filepath = path.join(dir, filename);
 
   const pdfDoc = printer.createPdfKitDocument(docDef);

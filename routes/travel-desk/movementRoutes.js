@@ -1241,6 +1241,21 @@ router.post("/claim-summary", async (req, res) => {
 
     const summaryData = await generateTravelSummaryPDF(result[0]);
 
+    // generateTravelDetailSummaryPDF(result[0]);
+
+    // axios
+    //   .post(
+    //     "https://smarthr.johnsonliftsltd.com:3001/api/travel-desk/movement/claim-detail-summary",
+    //     { movement_id: movement_id },
+    //     { headers: { "Content-Type": "application/json" } }
+    //   )
+    //   .then((data) => {
+    //     console.log(
+    //       data,
+    //       "=============================== data detail summary ==============="
+    //     );
+    //   });
+
     res.status(200).json({
       Status: "Success",
       Message: "Summary Retrived",
