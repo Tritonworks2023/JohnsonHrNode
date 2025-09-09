@@ -46,6 +46,9 @@ const ExpenseSchema = new mongoose.Schema({
               modified_amount: {
                 type: Number,
               },
+              modified_reason: {
+                type: String,
+              },
               fromLoc: {
                 type: String,
                 required: true,
@@ -67,6 +70,9 @@ const ExpenseSchema = new mongoose.Schema({
         modified_amount: {
           type: Number,
         },
+        modified_reason: {
+          type: String,
+        },
         receipt: { type: [String] },
         fromLoc: { type: String },
         toLoc: { type: String },
@@ -78,6 +84,9 @@ const ExpenseSchema = new mongoose.Schema({
         modified_amount: {
           type: Number,
         },
+        modified_reason: {
+          type: String,
+        },
         receipt: { type: [String] },
         fromLoc: { type: String },
         toLoc: { type: String },
@@ -88,6 +97,9 @@ const ExpenseSchema = new mongoose.Schema({
         amount: { type: Number },
         modified_amount: {
           type: Number,
+        },
+        modified_reason: {
+          type: String,
         },
         receipt: { type: [String] },
         fromLoc: { type: String },
@@ -114,6 +126,7 @@ const ExpenseSchema = new mongoose.Schema({
           cgst: { type: Number },
           igst: { type: Number },
           total_tax_amount: { type: Number },
+          round_off_amount: { type: Number },
         },
       },
       CONVEYANCE: {
@@ -126,6 +139,9 @@ const ExpenseSchema = new mongoose.Schema({
               },
               modified_amount: {
                 type: Number,
+              },
+              modified_reason: {
+                type: String,
               },
               fromLoc: {
                 type: String,
@@ -147,7 +163,7 @@ const ExpenseSchema = new mongoose.Schema({
         approver: { type: String },
         status: {
           type: String,
-          enum: ["PENDING", "APPROVED", "REJECTED"],
+          enum: ["PENDING", "APPROVED", "REJECTED", "CANCELLED"],
           default: "PENDING",
         },
       },
@@ -157,7 +173,7 @@ const ExpenseSchema = new mongoose.Schema({
     approver: { type: String },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["PENDING", "APPROVED", "REJECTED", "CANCELLED"],
       default: "PENDING",
     },
   },
@@ -165,7 +181,7 @@ const ExpenseSchema = new mongoose.Schema({
     approver: { type: String },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["PENDING", "APPROVED", "REJECTED", "CANCELLED"],
       default: "PENDING",
     },
     claimApprovedAt: { type: Date },
@@ -174,7 +190,7 @@ const ExpenseSchema = new mongoose.Schema({
     approver: { type: String },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED", "SETTLED"],
+      enum: ["PENDING", "APPROVED", "REJECTED", "SETTLED", "CANCELLED"],
       default: "PENDING",
     },
     claimSettledAt: { type: Date },
@@ -202,7 +218,7 @@ const AccommodationSchema = new mongoose.Schema({
     approver: { type: String },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["PENDING", "APPROVED", "REJECTED", "CANCELLED"],
       default: "PENDING",
     },
   },
@@ -238,7 +254,7 @@ const TravelDeskSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["PENDING", "APPROVED", "REJECTED", "CANCELLED"],
       default: "PENDING",
     },
     brcode: { type: String, ref: "BranchMaster", required: true },

@@ -409,7 +409,8 @@ router.post("/apply-movement", async (req, res) => {
       APPNAME,
     } = req.body;
 
-    if (APPNAME !== "MYTRAVEL" && LVCODE === "OS") {
+    if (APPNAME !== "MYTRAVEL") {
+      //&& LVCODE === "OS" removed the validation to not allow any records from hr app
       return res.status(200).json({
         Status: "Success",
         Message: "Movement applied successfully",

@@ -556,7 +556,7 @@ router.post("/add-expenses", async (req, res) => {
       });
     }
 
-    if (firstApproval.status === "" && finalApproval.status === "") {
+    if (firstApproval.status === "" && finalApproval.status === ""|| firstApproval.status === null) {
       (firstApproval.status = "PENDING"), (finalApproval.status = "PENDING");
     }
 
