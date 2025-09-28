@@ -69,6 +69,8 @@ const leaveDetailSchema = new Schema({
   JOBSPECIFIC: { type: String, default: "", trim: true },
   MOVEMENTID: { type: String, default: "" },
   APPNAME: { type: String, enum: ["MYTRAVEL", "HR"] },
+  qrcode: { type: String },
+  is_document_collected: { type: Boolean, default: false }
 });
 
 leaveDetailSchema.pre("save", function (next) {

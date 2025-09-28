@@ -14,6 +14,7 @@ const { executeOracleQuery } = require("../../config/oracle");
 const mongoose = require("mongoose");
 const { generateTravelSummaryPDF } = require("./generate_pdf");
 const { generateTravelDetailSummaryPDF } = require("../travel-desk/detail_pdf");
+const qrcode = require("qrcode");
 
 const moment = require("moment");
 
@@ -666,6 +667,8 @@ router.post("/apply-movement", async (req, res) => {
     const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
     const uniqueCode = `${timestamp}${incrementStr}`;
 
+    const code = await qrcode.toDataURL(uniqueCode);
+
     let insertObj = {
       LVAPNO,
       LVYR: parsedLVFRMDT.getFullYear().toString(),
@@ -702,6 +705,7 @@ router.post("/apply-movement", async (req, res) => {
       FRMSESSION, // added for DO
       TOSESSION,
       APPNAME: APPNAME,
+      qrcode: code,
     };
     if (LVCODE === "OS") {
       insertObj.FRMSESSION = FRMSESSION;
@@ -1416,6 +1420,38 @@ router.post("/claim-detail-summary", async (req, res) => {
       Message: "Internal Server Error",
       Code: 500,
     });
+  }
+});
+
+// acknowledgment to collect claim data
+
+router.post("/ack-claim", async (req, res) => {
+  try {
+    const { MOVEMENTID, status } = req.body;
+    const leaveRequest = await LeaveDetail.findOne({ MOVEMENTID: MOVEMENTID });
+    if (!leaveRequest) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Leave request not found",
+        Data: {},
+      });
+    }
+
+    const updateMovement = await LeaveDetail.findOneAndUpdate(
+      { MOVEMENTID: leaveRequest.MOVEMENTID },
+      { $set: { is_document_collected: status } }
+    );
+    return res.json({
+      Status: "Success",
+      Message: "Documents Received",
+      Data: leaveRequest,
+      Code: 200,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res
+      .status(500)
+      .json({ Status: "Failed", Message: error.message, Data: {}, Code: 500 });
   }
 });
 
