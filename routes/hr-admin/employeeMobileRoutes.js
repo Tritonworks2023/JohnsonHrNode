@@ -363,6 +363,17 @@ router.post("/login", async (req, res) => {
       // update hr app version in user table
       user.HRAPPVERSION = req.body.HRAPPVERSION;
       await user.save();
+
+      // check branch admin to show qr
+
+      const subAdminData = await admin_accessModel.findOne({
+        user_name: user.EMPNO,
+      });
+      if (subAdminData) {
+        user.scanQr = true;
+      } else {
+        user.scanQr = false;
+      }
       res.status(200).json({
         Status: "Success",
         Message: "User authenticated successfully",
