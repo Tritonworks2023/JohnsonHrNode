@@ -308,6 +308,18 @@ router.post("/login", async (req, res) => {
         Code: 404,
       });
     }
+    // check branch admin to show qr
+
+    const subAdminData = await admin_accessModel.findOne({
+      user_name: user.EMPNO,
+    });
+    console.log(subAdminData, "==========subadmin");
+    let scanQr = false;
+    if (subAdminData) {
+      scanQr = true;
+    } else {
+      scanQr = false;
+    }
     if (user.PASSWORD !== PASSWORD) {
       return res.status(400).json({
         Status: "Failed",
@@ -349,7 +361,7 @@ router.post("/login", async (req, res) => {
       res.status(200).json({
         Status: "Success",
         Message: "User authenticated successfully",
-        Data: user,
+        Data: { scanQr: scanQr, ...user["_doc"] },
         Code: 200,
       });
     } else if (user.DEVICEID !== req.body.device_id) {
@@ -364,16 +376,7 @@ router.post("/login", async (req, res) => {
       user.HRAPPVERSION = req.body.HRAPPVERSION;
       await user.save();
 
-      // check branch admin to show qr
-
-      const subAdminData = await admin_accessModel.findOne({
-        user_name: user.EMPNO,
-      });
-      if (subAdminData) {
-        user.scanQr = true;
-      } else {
-        user.scanQr = false;
-      }
+      console.log(user, "============== user");
       res.status(200).json({
         Status: "Success",
         Message: "User authenticated successfully",
