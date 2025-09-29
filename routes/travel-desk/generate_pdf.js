@@ -2,6 +2,7 @@ const fs = require("fs");
 const PdfPrinter = require("pdfmake");
 const moment = require("moment");
 const path = require("path");
+const { Session } = require("inspector/promises");
 // const data = require("./data.json");
 const baseURL = process.env.BASE_URL;
 
@@ -24,12 +25,18 @@ const generateTravelSummaryPDF = async (data) => {
     const travel = data;
     const { movement, employee, expenceDetails, tda } = travel;
     console.log(
+      "=====================================================travel=================================================================",
+      travel
+    );
+    console.log(
       expenceDetails,
       "============================ expenceDetails ======================="
     );
     const travelDates = {
       from: moment(movement.LVFRMDT).format("DD-MM-YYYY"),
       to: moment(movement.LVTODT).format("DD-MM-YYYY"),
+      dep_from: moment(movement.DEPARTUREDT).format("DD-MM-YYYY"),
+      dep_to: moment(movement.RETURNDT).format("DD-MM-YYYY"),
     };
 
     const header = [
@@ -45,6 +52,16 @@ const generateTravelSummaryPDF = async (data) => {
       { text: `Advanced Amount: ${movement.ADVANCEAMT || "--"}` },
       { text: `From Location: ${movement.FROMLOC}` },
       { text: `To Location: ${movement.TOLOC}` },
+      {text: `Departure Date: ${travelDates.dep_from}   Session - ${movement.FRMSESSION}`},
+      {text: `Return Date: ${travelDates.dep_to}   Session - ${movement.TOSESSION}`},
+      // {
+      //   label: "Departure Date",
+      //   value: `${travelDates.dep_from} (Session: ${movement.FRMSESSION})`,
+      // },
+      // {
+      //   label: "Return Date",
+      //   value: `${travelDates.dep_to} (Session: ${movement.TOSESSION})`,
+      // },
     ];
 
     const tableBody = [
