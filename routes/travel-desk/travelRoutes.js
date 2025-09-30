@@ -982,6 +982,18 @@ router.post("/add-expenses", async (req, res) => {
             validExpenses[type].city = city;
             validExpenses[type].gst = gst; // added gst on 02-06-2025
           }
+          else{
+             validExpenses[type].amount = amount;
+            validExpenses[type].receipt = receipt;
+            validExpenses[type].fromLoc = fromLoc;
+            validExpenses[type].toLoc = toLoc;
+            validExpenses[type].description = description;
+            validExpenses[type].city = city;
+            validExpenses[type].gst = gst; 
+          }
+          
+
+
         }
 
         // Add expense data to validExpenses
