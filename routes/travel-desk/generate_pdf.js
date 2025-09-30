@@ -39,6 +39,8 @@ const generateTravelSummaryPDF = async (data) => {
       dep_to: moment(movement.RETURNDT).format("DD-MM-YYYY"),
     };
 
+    const qrCode = movement?.qrcode || null;
+
     const header = [
       { text: `SEQ NO: ${movement.MOVEMENTID}` },
       { text: `EMP NO: ${employee.EMPNO}` },
@@ -221,6 +223,18 @@ const generateTravelSummaryPDF = async (data) => {
         sectionHeader: { fontSize: 12, bold: true, decoration: "underline" },
       },
     };
+
+if (qrCode) {
+  docDefinition.content.push({
+    image: qrCode, // base64 string (data:image/png;base64,...)
+    width: 180,    // bigger size (try 150–200 for large QR)
+    height: 180,   // keep square
+    absolutePosition: { x: 400, y: 620 }, // move lower/right as needed
+    alignment: "right",
+  });
+}
+
+
     const dirPath = path.join(
       __dirname,
       "./../public/FINANCEDOCS",
@@ -279,3 +293,6 @@ const generateTravelSummaryPDF = async (data) => {
 };
 
 module.exports = { generateTravelSummaryPDF };
+
+
+

@@ -70,7 +70,8 @@ const leaveDetailSchema = new Schema({
   MOVEMENTID: { type: String, default: "" },
   APPNAME: { type: String, enum: ["MYTRAVEL", "HR"] },
   qrcode: { type: String },
-  is_document_collected: { type: Boolean, default: false }
+  is_document_collected: { type: Boolean, default: false },
+  document_submitted_at: { type: Date, default: null }
 });
 
 leaveDetailSchema.pre("save", function (next) {

@@ -1425,34 +1425,90 @@ router.post("/claim-detail-summary", async (req, res) => {
 
 // acknowledgment to collect claim data
 
+// router.post("/ack-claim", async (req, res) => {
+//   try {
+//     const { MOVEMENTID, status } = req.body;
+//     const leaveRequest = await LeaveDetail.findOne({ MOVEMENTID: MOVEMENTID });
+//     if (!leaveRequest) {
+//       return res.status(404).json({
+//         Status: "Failed",
+//         Message: "Leave request not found",
+//         Data: {},
+//       });
+//     }
+
+//     const updateMovement = await LeaveDetail.findOneAndUpdate(
+//       { MOVEMENTID: leaveRequest.MOVEMENTID },
+//       { $set: { is_document_collected: status } }
+//     );
+
+
+//     return res.json({
+//       Status: "Success",
+//       Message: "Documents Received",
+//       Data: leaveRequest,
+//       Code: 200,
+//     });
+//   } catch (error) {
+//     console.error(error.message);
+//     res
+//       .status(500)
+//       .json({ Status: "Failed", Message: error.message, Data: {}, Code: 500 });
+//   }
+// });
+
+
+
+
 router.post("/ack-claim", async (req, res) => {
   try {
     const { MOVEMENTID, status } = req.body;
-    const leaveRequest = await LeaveDetail.findOne({ MOVEMENTID: MOVEMENTID });
+
+    const leaveRequest = await LeaveDetail.findOne({ MOVEMENTID });
     if (!leaveRequest) {
       return res.status(404).json({
         Status: "Failed",
         Message: "Leave request not found",
         Data: {},
+        Code: 404,
       });
     }
 
+    // 🚨 Already collected → stop here
+    if (leaveRequest.is_document_collected === true) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: `Documents already collected on ${moment(leaveRequest?.document_submitted_at).format("DD-MM-YYYY HH:mm") || ""}`,
+        Data: leaveRequest,
+        Code: 400,
+      });
+    }
+
+    // ✅ Update if not already true
     const updateMovement = await LeaveDetail.findOneAndUpdate(
       { MOVEMENTID: leaveRequest.MOVEMENTID },
-      { $set: { is_document_collected: status } }
+      { $set: { is_document_collected: status, document_submitted_at: new Date() } },
+      { new: true }
     );
+
     return res.json({
       Status: "Success",
       Message: "Documents Received",
-      Data: leaveRequest,
+      Data: updateMovement,
       Code: 200,
     });
   } catch (error) {
     console.error(error.message);
-    res
-      .status(500)
-      .json({ Status: "Failed", Message: error.message, Data: {}, Code: 500 });
+    res.status(500).json({
+      Status: "Failed",
+      Message: error.message,
+      Data: {},
+      Code: 500,
+    });
   }
 });
 
+
 module.exports = router;
+
+
