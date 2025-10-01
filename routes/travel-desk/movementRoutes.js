@@ -667,7 +667,9 @@ router.post("/apply-movement", async (req, res) => {
     const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
     const uniqueCode = `${timestamp}${incrementStr}`;
 
-    const code = await qrcode.toDataURL(uniqueCode);
+    const code = await qrcode.toDataURL(
+      JSON.stringify({ MOVEMENTID: uniqueCode, EMPNO: EMPNO })
+    );
 
     let insertObj = {
       LVAPNO,
@@ -1442,7 +1444,6 @@ router.post("/claim-detail-summary", async (req, res) => {
 //       { $set: { is_document_collected: status } }
 //     );
 
-
 //     return res.json({
 //       Status: "Success",
 //       Message: "Documents Received",
@@ -1456,9 +1457,6 @@ router.post("/claim-detail-summary", async (req, res) => {
 //       .json({ Status: "Failed", Message: error.message, Data: {}, Code: 500 });
 //   }
 // });
-
-
-
 
 router.post("/ack-claim", async (req, res) => {
   try {
@@ -1478,7 +1476,11 @@ router.post("/ack-claim", async (req, res) => {
     if (leaveRequest.is_document_collected === true) {
       return res.status(400).json({
         Status: "Failed",
-        Message: `Documents already collected on ${moment(leaveRequest?.document_submitted_at).format("DD-MM-YYYY HH:mm") || ""}`,
+        Message: `Documents already collected on ${
+          moment(leaveRequest?.document_submitted_at).format(
+            "DD-MM-YYYY HH:mm"
+          ) || ""
+        }`,
         Data: leaveRequest,
         Code: 400,
       });
@@ -1487,7 +1489,12 @@ router.post("/ack-claim", async (req, res) => {
     // ✅ Update if not already true
     const updateMovement = await LeaveDetail.findOneAndUpdate(
       { MOVEMENTID: leaveRequest.MOVEMENTID },
-      { $set: { is_document_collected: status, document_submitted_at: new Date() } },
+      {
+        $set: {
+          is_document_collected: status,
+          document_submitted_at: new Date(),
+        },
+      },
       { new: true }
     );
 
@@ -1508,7 +1515,4 @@ router.post("/ack-claim", async (req, res) => {
   }
 });
 
-
 module.exports = router;
-
-
