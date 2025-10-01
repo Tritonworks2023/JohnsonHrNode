@@ -1460,7 +1460,7 @@ router.post("/claim-detail-summary", async (req, res) => {
 
 router.post("/ack-claim", async (req, res) => {
   try {
-    const { MOVEMENTID, status } = req.body;
+    const { MOVEMENTID, status, document_submitted_by } = req.body;
 
     const leaveRequest = await LeaveDetail.findOne({ MOVEMENTID });
     if (!leaveRequest) {
@@ -1493,6 +1493,7 @@ router.post("/ack-claim", async (req, res) => {
         $set: {
           is_document_collected: status,
           document_submitted_at: new Date(),
+          document_submitted_by: document_submitted_by,
         },
       },
       { new: true }
