@@ -28,7 +28,7 @@ const CompensatoryOff = require("../../models/compensatoryOffModel");
 const UserManagement = require("../../models/user_managementModel");
 const ServiceUserDetails = require("../../models/service_userdetailsModel");
 
-var admin_accessModel = require("../../models/admin_accessModel");
+const admin_accessModel = require("../../models/admin_accessModel");
 
 const { createNotification } = require("./shareRoutes");
 const PushNotification = require("../../models/pushNotificationModel");
@@ -270,7 +270,23 @@ function getLastWorkingDate() {
 // ******************************************************************************************************************************************************************************
 router.post("/login", async (req, res) => {
   const { EMPNO, PASSWORD, HRAPPVERSION } = req.body;
-  console.log("===========req.body", req.body);
+  console.log(
+    "===========req.body===================================",
+    req.body
+  );
+
+  // check branch admin to show qr
+
+  const subAdminData = await admin_accessModel.findOne({
+    user_name: EMPNO,
+  });
+  console.log(subAdminData, "==========subadmin");
+  let scanQr = false;
+  if (subAdminData) {
+    scanQr = true;
+  } else {
+    scanQr = false;
+  }
 
   // return res.status(400).json({
   //   Status: "Failed",
@@ -285,7 +301,7 @@ router.post("/login", async (req, res) => {
     res.status(200).json({
       Status: "Success",
       Message: "User authenticated successfully",
-      Data: user,
+      Data: { scanQr: scanQr, ...user["_doc"] },
       Code: 200,
     });
   }
@@ -308,18 +324,7 @@ router.post("/login", async (req, res) => {
         Code: 404,
       });
     }
-    // check branch admin to show qr
 
-    const subAdminData = await admin_accessModel.findOne({
-      user_name: user.EMPNO,
-    });
-    console.log(subAdminData, "==========subadmin");
-    let scanQr = false;
-    if (subAdminData) {
-      scanQr = true;
-    } else {
-      scanQr = false;
-    }
     if (user.PASSWORD !== PASSWORD) {
       return res.status(400).json({
         Status: "Failed",
@@ -380,7 +385,7 @@ router.post("/login", async (req, res) => {
       res.status(200).json({
         Status: "Success",
         Message: "User authenticated successfully",
-        Data: user,
+        Data: { scanQr: scanQr, ...user["_doc"] },
         Code: 200,
       });
     }
