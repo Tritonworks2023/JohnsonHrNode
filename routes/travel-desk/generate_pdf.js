@@ -222,6 +222,20 @@ const generateTravelSummaryPDF = async (data) => {
       styles: {
         sectionHeader: { fontSize: 12, bold: true, decoration: "underline" },
       },
+
+      footer: (currentPage, pageCount) => {
+  const nowIST = new Date().toLocaleString("en-IN", { 
+    timeZone: "Asia/Kolkata" 
+  });
+  return {
+    text: `Printed on : ${nowIST}`,
+    alignment: "right",
+    fontSize: 9,
+    margin: [0, 5, 20, 0],
+  };
+}
+
+      
     };
 
 if (qrCode) {

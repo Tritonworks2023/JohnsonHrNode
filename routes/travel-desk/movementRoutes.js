@@ -1244,6 +1244,50 @@ router.post("/claim-summary", async (req, res) => {
       "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
     );
 
+
+    if (!result.length) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "No movement found",
+        Code: 404,
+      });
+    }
+
+   let movement = result[0].movement;
+
+// ✅ Generate QR code if missing
+if (movement && !movement.qrcode && movement.MOVEMENTID) {
+  // Get current timestamp YYYYMM
+  const timestamp = moment().format("YYYYMM");
+
+  // Extract last sequence from MOVEMENTID
+  let lastSeqNo = 0;
+  const lastId = movement.MOVEMENTID.toString();
+  const lastTimestamp = lastId.slice(0, 6);
+  const lastNumber = parseInt(lastId.slice(6), 10);
+
+  if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
+    lastSeqNo = lastNumber;
+  }
+
+  // Increment and format
+  const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
+  const uniqueCode = `${timestamp}${incrementStr}`;
+
+  // Generate QR code
+  const qrDataUrl = await qrcode.toDataURL(uniqueCode);
+
+  // Save to DB
+  await LeaveDetail.updateOne(
+    { _id: movement._id },
+    { $set: { qrcode: qrDataUrl } }
+  );
+
+  // Attach to object for PDF generation
+  movement.qrcode = qrDataUrl;
+}
+
+
     const summaryData = await generateTravelSummaryPDF(result[0]);
 
     // generateTravelDetailSummaryPDF(result[0]);

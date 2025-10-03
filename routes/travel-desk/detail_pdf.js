@@ -332,13 +332,32 @@ const generateTravelDetailSummaryPDF = async (data) => {
     },
   });
 
+
+   if (movement?.qrcode) {
+      const qrBase64 = movement.qrcode.startsWith("data:image")
+        ? movement.qrcode
+        : `data:image/png;base64,${movement.qrcode}`;
+
+      content.push({
+        image: qrBase64,
+        width: 120,
+        alignment: "right",
+        margin: [0, 10, 0, 20], // add some space
+      });
+    }
+
   // === ADD RECEIPTS SECTION ===
   if (allReceipts.length > 0) {
     const validReceipts = allReceipts.filter(
       (group) => Array.isArray(group.receipts) && group.receipts.length > 0
     );
 
+
+   
+
     if (validReceipts.length > 0) {
+
+
       content.push({
         text: "RECEIPTS",
         style: "subheader",
@@ -395,6 +414,7 @@ const generateTravelDetailSummaryPDF = async (data) => {
       },
     },
   };
+ 
 
   const dir = path.resolve(
     __dirname,
@@ -421,7 +441,7 @@ const generateTravelDetailSummaryPDF = async (data) => {
     writeStream.on("error", reject);
   });
 
-  return `https://smarthr.johnsonliftsltd.com:3001/api/public/FINANCEDOCS/${employee.EMPNO}/${movement.MOVEMENTID}/${filename}`;
+  return `https://smarthr.johnsonliftsltd.com:3000/api/public/FINANCEDOCS/${employee.EMPNO}/${movement.MOVEMENTID}/${filename}`;
 };
 
 module.exports = { generateTravelDetailSummaryPDF };
