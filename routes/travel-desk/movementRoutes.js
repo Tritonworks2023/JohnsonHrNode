@@ -1277,7 +1277,7 @@ if (movement && !movement.qrcode && movement.MOVEMENTID) {
   const uniqueCode = `${timestamp}${incrementStr}`;
 
   // Generate QR code
-  const qrDataUrl = await qrcode.toDataURL(uniqueCode);
+  const qrDataUrl = await qrcode.toDataURL(JSON.stringify({ MOVEMENTID: uniqueCode }));
 
   // Save to DB
   await LeaveDetail.updateOne(

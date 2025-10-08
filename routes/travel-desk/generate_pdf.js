@@ -239,11 +239,11 @@ const generateTravelSummaryPDF = async (data) => {
     };
 
 if (qrCode) {
-  docDefinition.content.push({
-    image: qrCode, // base64 string (data:image/png;base64,...)
-    width: 180,    // bigger size (try 150–200 for large QR)
-    height: 180,   // keep square
-    absolutePosition: { x: 400, y: 620 }, // move lower/right as needed
+  docDefinition.content.unshift({
+    image: qrCode, // base64 image
+    width: 100,     // adjust size as needed
+    height: 100,
+    absolutePosition: { x: 450, y: 25 }, // top-right corner
     alignment: "right",
   });
 }
