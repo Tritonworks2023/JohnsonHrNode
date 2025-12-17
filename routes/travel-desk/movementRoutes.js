@@ -23,7 +23,7 @@ const EmployeeMaster = require("../../models/employeeMasterModel");
 const LeaveDetail = require("../../models/leaveDetailModel");
 const BranchMaster = require("../../models/branchMasterModel");
 const Holiday = require("../../models/holidayModel");
-const { TravelDesk } = require("../../models/travelDeskModel");
+const { TravelDesk,Expense } = require("../../models/travelDeskModel");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
 const Permission = require("../../models/permissionModel");
@@ -779,10 +779,24 @@ router.post("/my-movements-list", async (req, res) => {
     //  leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
     //   ENTRYDT: -1,
     // });
+    const formattedLeaveList = [];
+    for (const item of leaveList) {
+      const getdDataFromExpense = await Expense.find({
+        travelId: item.travelId,
+      });
+      const formattedItem = {
+        ...item.toObject(),
+        OS_STATUS:
+          getdDataFromExpense.length > 0
+            ? getdDataFromExpense[0].finalApproval.status
+            : "PENDING",
+      };
+      formattedLeaveList.push(formattedItem);
+    }
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
-      Data: leaveList,
+      Data: formattedLeaveList, // MODIFIED ON 17-12-2025 BY PRADEEP
       Code: 200,
     });
   } catch (error) {
@@ -1246,7 +1260,6 @@ router.post("/claim-summary", async (req, res) => {
       "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
     );
 
-
     if (!result.length) {
       return res.status(404).json({
         Status: "Failed",
@@ -1255,40 +1268,41 @@ router.post("/claim-summary", async (req, res) => {
       });
     }
 
-   let movement = result[0].movement;
+    let movement = result[0].movement;
 
-// ✅ Generate QR code if missing
-if (movement && !movement.qrcode && movement.MOVEMENTID) {
-  // Get current timestamp YYYYMM
-  const timestamp = moment().format("YYYYMM");
+    // ✅ Generate QR code if missing
+    if (movement && !movement.qrcode && movement.MOVEMENTID) {
+      // Get current timestamp YYYYMM
+      const timestamp = moment().format("YYYYMM");
 
-  // Extract last sequence from MOVEMENTID
-  let lastSeqNo = 0;
-  const lastId = movement.MOVEMENTID.toString();
-  const lastTimestamp = lastId.slice(0, 6);
-  const lastNumber = parseInt(lastId.slice(6), 10);
+      // Extract last sequence from MOVEMENTID
+      let lastSeqNo = 0;
+      const lastId = movement.MOVEMENTID.toString();
+      const lastTimestamp = lastId.slice(0, 6);
+      const lastNumber = parseInt(lastId.slice(6), 10);
 
-  if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
-    lastSeqNo = lastNumber;
-  }
+      if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
+        lastSeqNo = lastNumber;
+      }
 
-  // Increment and format
-  const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
-  const uniqueCode = `${timestamp}${incrementStr}`;
+      // Increment and format
+      const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
+      const uniqueCode = `${timestamp}${incrementStr}`;
 
-  // Generate QR code
-  const qrDataUrl = await qrcode.toDataURL(JSON.stringify({ MOVEMENTID: uniqueCode }));
+      // Generate QR code
+      const qrDataUrl = await qrcode.toDataURL(
+        JSON.stringify({ MOVEMENTID: uniqueCode })
+      );
 
-  // Save to DB
-  await LeaveDetail.updateOne(
-    { _id: movement._id },
-    { $set: { qrcode: qrDataUrl } }
-  );
+      // Save to DB
+      await LeaveDetail.updateOne(
+        { _id: movement._id },
+        { $set: { qrcode: qrDataUrl } }
+      );
 
-  // Attach to object for PDF generation
-  movement.qrcode = qrDataUrl;
-}
-
+      // Attach to object for PDF generation
+      movement.qrcode = qrDataUrl;
+    }
 
     const summaryData = await generateTravelSummaryPDF(result[0]);
 
