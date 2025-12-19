@@ -23,7 +23,7 @@ const EmployeeMaster = require("../../models/employeeMasterModel");
 const LeaveDetail = require("../../models/leaveDetailModel");
 const BranchMaster = require("../../models/branchMasterModel");
 const Holiday = require("../../models/holidayModel");
-const { TravelDesk,Expense } = require("../../models/travelDeskModel");
+const { TravelDesk, Expense } = require("../../models/travelDeskModel");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
 const Permission = require("../../models/permissionModel");
@@ -493,6 +493,7 @@ router.post("/apply-movement", async (req, res) => {
         TOLOCLAT,
         TOLOCLNG
       );
+      /*
       travelTimeInHours = (
         await getTravelTime(
           FROMLOCLAT,
@@ -503,6 +504,7 @@ router.post("/apply-movement", async (req, res) => {
         )
       ).toFixed(2);
       console.log("========travelTimeInHours", travelTimeInHours);
+      */
       const gradeEligibility =
         travelEligibility[employeeGrade] || travelEligibility["Trainee"]; // Default to 'Trainee' if grade not found
 
@@ -520,7 +522,7 @@ router.post("/apply-movement", async (req, res) => {
       if ((employeeGrade === "E7" || employeeGrade === "E6") && !DEVIATION) {
         if (
           gradeEligibility.mode === "Air" &&
-          travelTimeInHours < 10 &&
+          // travelTimeInHours < 10 &&    // commented due to map key replacement issue  on 17-12-2025 by pradeep
           JOURNEYMODE !== "BUS" &&
           JOURNEYMODE !== "TRAIN" &&
           JOURNEYMODE !== "CAR"
@@ -537,12 +539,13 @@ router.post("/apply-movement", async (req, res) => {
         } else {
           JOURNEYMODE1 = JOURNEYMODE;
         }
-        if (travelTimeInHours < 14 && gradeEligibility.mode === JOURNEYMODE1)
+        if (gradeEligibility.mode === JOURNEYMODE1)
+          //travelTimeInHours < 14 &&
           // JOURNEYMODE --- "Air"
           isValidJourney = false;
       } else if (employeeGrade === "E3" && !DEVIATION) {
         if (
-          travelTimeInHours < 16 &&
+          // travelTimeInHours < 16 &&
           gradeEligibility.mode === "Air" &&
           JOURNEYMODE !== "BUS" &&
           JOURNEYMODE !== "TRAIN" &&
@@ -570,7 +573,7 @@ router.post("/apply-movement", async (req, res) => {
       if (DEVIATION) {
         if (!isValidJourney) {
           DEVIATIONDATA.GRADE = employeeGrade;
-          DEVIATIONDATA.travelTimeInHours = travelTimeInHours;
+          // DEVIATIONDATA.travelTimeInHours = travelTimeInHours;
           DEVIATIONDATA.gradeEligibility = gradeEligibility;
           DEVIATIONDATA.MODE = JOURNEYMODE;
         }
@@ -719,7 +722,7 @@ router.post("/apply-movement", async (req, res) => {
       if (CARRANGEMENTS) {
         insertObj.CARRANGEMENTS = CARRANGEMENTS;
       }
-      insertObj.TRAVELTIME = travelTimeInHours;
+      insertObj.TRAVELTIME = 0; //travelTimeInHours;
       insertObj.DEPARTUREDT = moment(DEPARTUREDT, "DD-MM-YYYY").toDate();
       insertObj.RETURNDT = moment(RETURNDT, "DD-MM-YYYY").toDate();
       insertObj.DEVIATION = DEVIATION;
@@ -727,7 +730,18 @@ router.post("/apply-movement", async (req, res) => {
       insertObj.DEVIATIONDATA = DEVIATIONDATA;
       insertObj.LODGINGPAIDBY = LODGINGPAIDBY;
     }
-
+    // CHECK DUPLICATE MOVEMENTID
+    const duplicateMovement = await LeaveDetail.findOne({
+      MOVEMENTID: uniqueCode,
+    });
+    if (duplicateMovement) {
+      return res.status(500).json({
+        Status: "Failed",
+        Message: "High Traffic!!, please try again",
+        Data: {},
+        Code: 500,
+      });
+    }
     const newLeave = new LeaveDetail(insertObj);
     await newLeave.save();
     const notificationData = {
