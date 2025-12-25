@@ -1255,29 +1255,17 @@ router.post("/claim-summary", async (req, res) => {
       });
     }
 
-   let movement = result[0].movement;
+  let movement = result[0].movement;
+  let employee = result[0].employee;
 
-// ✅ Generate QR code if missing
-if (movement && !movement.qrcode && movement.MOVEMENTID) {
-  // Get current timestamp YYYYMM
-  const timestamp = moment().format("YYYYMM");
-
-  // Extract last sequence from MOVEMENTID
-  let lastSeqNo = 0;
-  const lastId = movement.MOVEMENTID.toString();
-  const lastTimestamp = lastId.slice(0, 6);
-  const lastNumber = parseInt(lastId.slice(6), 10);
-
-  if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
-    lastSeqNo = lastNumber;
-  }
-
-  // Increment and format
-  const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
-  const uniqueCode = `${timestamp}${incrementStr}`;
 
   // Generate QR code
-  const qrDataUrl = await qrcode.toDataURL(JSON.stringify({ MOVEMENTID: uniqueCode }));
+  const qrDataUrl = await qrcode.toDataURL(JSON.stringify({ MOVEMENTID:movement.MOVEMENTID, EMPNO: movement.EMPNO,EMPGRADE:employee.GRADE,
+    BRCODE: movement.BRCODE,
+    EMPNAME: movement.EMPNAME,
+    FROMDATE: moment(movement.LVFRMDT).format("DD-MM-YYYY"),
+    TODATE: moment(movement.LVTODT).format("DD-MM-YYYY"),
+    JOURNEYMODE: movement.JOURNEYMODE, }));
 
   // Save to DB
   await LeaveDetail.updateOne(
@@ -1287,7 +1275,7 @@ if (movement && !movement.qrcode && movement.MOVEMENTID) {
 
   // Attach to object for PDF generation
   movement.qrcode = qrDataUrl;
-}
+//}
 
 
     const summaryData = await generateTravelSummaryPDF(result[0]);

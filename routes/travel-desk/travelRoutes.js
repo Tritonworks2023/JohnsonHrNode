@@ -854,7 +854,7 @@ router.post("/add-expenses", async (req, res) => {
               }
 
               if (amount > compAmount) {
-                res.status(400).json({
+              return  res.status(400).json({
                   Status: "Failed",
                   Message: `Only 50% of the amount 0f bording and loding will claim according to the policy`,
                   Code: 400,
@@ -876,7 +876,7 @@ router.post("/add-expenses", async (req, res) => {
                   "======================= amount ================================="
                 );
                 if (amount > lastDatePercentageAmt) {
-                  res.status(400).json({
+                 return res.status(400).json({
                     Status: "Failed",
                     Message: `Only 30% of the amount 0f bording and loding will claim according to the policy for last day`,
                     Code: 400,

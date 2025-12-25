@@ -2,16 +2,10 @@ const fs = require("fs");
 const PdfPrinter = require("pdfmake");
 const moment = require("moment");
 const path = require("path");
-const { Session } = require("inspector/promises");
-// const data = require("./data.json");
 const baseURL = process.env.BASE_URL;
 
 const generateTravelSummaryPDF = async (data) => {
   try {
-    console.log(
-      data,
-      "================================== data ============================"
-    );
     const fonts = {
       Roboto: {
         normal: "Helvetica",
@@ -23,15 +17,8 @@ const generateTravelSummaryPDF = async (data) => {
 
     const printer = new PdfPrinter(fonts);
     const travel = data;
-    const { movement, employee, expenceDetails, tda } = travel;
-    console.log(
-      "=====================================================travel=================================================================",
-      travel
-    );
-    console.log(
-      expenceDetails,
-      "============================ expenceDetails ======================="
-    );
+    const { movement, employee, expenceDetails } = travel;
+
     const travelDates = {
       from: moment(movement.LVFRMDT).format("DD-MM-YYYY"),
       to: moment(movement.LVTODT).format("DD-MM-YYYY"),
@@ -54,18 +41,30 @@ const generateTravelSummaryPDF = async (data) => {
       { text: `Advanced Amount: ${movement.ADVANCEAMT || "--"}` },
       { text: `From Location: ${movement.FROMLOC}` },
       { text: `To Location: ${movement.TOLOC}` },
-      {text: `Departure Date: ${travelDates.dep_from}   Session - ${movement.FRMSESSION}`},
-      {text: `Return Date: ${travelDates.dep_to}   Session - ${movement.TOSESSION}`},
-      // {
-      //   label: "Departure Date",
-      //   value: `${travelDates.dep_from} (Session: ${movement.FRMSESSION})`,
-      // },
-      // {
-      //   label: "Return Date",
-      //   value: `${travelDates.dep_to} (Session: ${movement.TOSESSION})`,
-      // },
+      { text: `Departure Date: ${travelDates.dep_from}   Session - ${movement.FRMSESSION}` },
+      { text: `Return Date: ${travelDates.dep_to}   Session - ${movement.TOSESSION}` },
     ];
 
+    // Helper to sum amounts
+    const sumAmount = (arr) =>
+      Array.isArray(arr)
+        ? arr.reduce((sum, item) => sum + (item?.amount || 0), 0)
+        : 0;
+
+    // Flatten all expenses and include TDA
+    let allExpenses = expenceDetails.flatMap((detail) =>
+      detail.expenses.map((exp) => ({
+        ...exp,
+        tda: detail.tda || 0,
+      }))
+    );
+
+    // Sort by date ascending
+    allExpenses.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    let grandTotal = 0;
+
+    // Table header
     const tableBody = [
       [
         "S.No",
@@ -77,91 +76,39 @@ const generateTravelSummaryPDF = async (data) => {
         "LODGING",
         "CONVEYANCE",
         "TOTAL AMOUNT",
-      ].map((cell) => ({
-        text: cell,
-        alignment: "center",
-        bold: true,
-        fontSize: 9,
-      })),
+      ].map((cell) => ({ text: cell, alignment: "center", bold: true, fontSize: 9 })),
     ];
 
-    let serial = 1;
-    let grandTotal = 0;
+    // Build table rows from sorted expenses
+    allExpenses.forEach((exp, index) => {
+      const formattedDate = moment(new Date(exp.date)).format("DD-MM-YYYY");
 
-    const sumAmount = (arr) =>
-      Array.isArray(arr)
-        ? arr.reduce((sum, item) => sum + (item?.amount || 0), 0)
-        : 0;
+      const travelAmt = sumAmount(exp.TRAVEL?.amount);
+      const compositeAmt = exp.COMPOSITE?.amount || 0;
+      const boardingAmt = exp.BOARDING?.amount || 0;
+      const lodgingAmt = exp.LODGING?.amount || 0;
+      const conveyanceAmt = sumAmount(exp.CONVEYANCE?.amount);
+      const TDAamt = exp.tda || 0;
 
-    // const getTDAByDate = (date) => {
-    //   const targetDate = moment.utc(date).startOf("day");
-    //   const detail = expenceDetails.find((ed) =>
-    //     ed.expenses.some((exp) =>
-    //       moment.utc(exp.date).startOf("day").isSame(targetDate)
-    //     )
-    //   );
+      const totalAmt =
+        travelAmt + compositeAmt + boardingAmt + TDAamt + lodgingAmt + conveyanceAmt;
 
-    //   if (!detail || !detail.expenseDeviationTDA) return 0;
+      grandTotal += totalAmt;
 
-    //   const tdaEntry = detail.expenseDeviationTDA.find((tda) =>
-    //     moment.utc(tda.date).startOf("day").isSame(targetDate)
-    //   );
-
-    //   return (
-    //     (tdaEntry?.COMPOSITE?.amount || 0) + (tdaEntry?.BOARDING?.amount || 0)
-    //   );
-    // };
-
-    let allExpenses = expenceDetails.flatMap((d) => d.expenses);
-    let totalRows = allExpenses.length;
-    let globalIndex = 0; // Tracks index across all expense entries
-
-    expenceDetails.forEach((detail) => {
-      detail.expenses.forEach((exp) => {
-        const isFirstRow = globalIndex === 0;
-        const isLastRow = globalIndex === totalRows - 1;
-
-        const formattedDate = moment(new Date(exp.date)).format("DD-MM-YYYY");
-
-        const travelAmt = sumAmount(exp.TRAVEL?.amount);
-        const compositeAmt = exp.COMPOSITE?.amount || 0;
-        const boardingAmt = exp.BOARDING?.amount || 0;
-        const lodgingAmt = exp.LODGING?.amount || 0;
-        const conveyanceAmt = sumAmount(exp.CONVEYANCE?.amount);
-
-        const TDAamt = detail.tda || 0;
-
-        const totalAmt =
-          travelAmt +
-          compositeAmt +
-          boardingAmt +
-          (isFirstRow || isLastRow ? TDAamt : 0) + // Only include in total if showing
-          lodgingAmt +
-          conveyanceAmt;
-
-        grandTotal += totalAmt;
-
-        const row = [
-          { text: serial++, alignment: "center", fontSize: 11 },
-          { text: formattedDate, alignment: "center", fontSize: 11 },
-          { text: travelAmt.toFixed(2), alignment: "center", fontSize: 11 },
-          { text: compositeAmt.toFixed(2), alignment: "center", fontSize: 11 },
-          { text: boardingAmt.toFixed(2), alignment: "center", fontSize: 11 },
-          {
-            text: isFirstRow || isLastRow ? TDAamt.toFixed(2) : 0,
-            alignment: "center",
-            fontSize: 11,
-          },
-          { text: lodgingAmt.toFixed(2), alignment: "center", fontSize: 11 },
-          { text: conveyanceAmt.toFixed(2), alignment: "center", fontSize: 11 },
-          { text: totalAmt.toFixed(2), alignment: "center", fontSize: 11 },
-        ];
-
-        tableBody.push(row);
-        globalIndex++;
-      });
+      tableBody.push([
+        { text: index + 1, alignment: "center", fontSize: 11 },
+        { text: formattedDate, alignment: "center", fontSize: 11 },
+        { text: travelAmt.toFixed(2), alignment: "center", fontSize: 11 },
+        { text: compositeAmt.toFixed(2), alignment: "center", fontSize: 11 },
+        { text: boardingAmt.toFixed(2), alignment: "center", fontSize: 11 },
+        { text: TDAamt.toFixed(2), alignment: "center", fontSize: 11 },
+        { text: lodgingAmt.toFixed(2), alignment: "center", fontSize: 11 },
+        { text: conveyanceAmt.toFixed(2), alignment: "center", fontSize: 11 },
+        { text: totalAmt.toFixed(2), alignment: "center", fontSize: 11 },
+      ]);
     });
 
+    // Add grand total row
     tableBody.push([
       { text: "Total", colSpan: 8, alignment: "right", bold: true },
       {},
@@ -174,6 +121,7 @@ const generateTravelSummaryPDF = async (data) => {
       { text: grandTotal.toFixed(2), alignment: "center", bold: true },
     ]);
 
+    // PDF definition
     const docDefinition = {
       content: [
         {
@@ -222,40 +170,38 @@ const generateTravelSummaryPDF = async (data) => {
       styles: {
         sectionHeader: { fontSize: 12, bold: true, decoration: "underline" },
       },
-
       footer: (currentPage, pageCount) => {
-  const nowIST = new Date().toLocaleString("en-IN", { 
-    timeZone: "Asia/Kolkata" 
-  });
-  return {
-    text: `Printed on : ${nowIST}`,
-    alignment: "right",
-    fontSize: 9,
-    margin: [0, 5, 20, 0],
-  };
-}
-
-      
+        const nowIST = new Date().toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
+        });
+        return {
+          text: `Printed on : ${nowIST}`,
+          alignment: "right",
+          fontSize: 9,
+          margin: [0, 5, 20, 0],
+        };
+      },
     };
 
-if (qrCode) {
-  docDefinition.content.unshift({
-    image: qrCode, // base64 image
-    width: 100,     // adjust size as needed
-    height: 100,
-    absolutePosition: { x: 450, y: 25 }, // top-right corner
-    alignment: "right",
-  });
-}
+    // Add QR code if exists
+    if (qrCode) {
+      docDefinition.content.unshift({
+        image: qrCode, // base64 image
+        width: 100,
+        height: 100,
+        absolutePosition: { x: 450, y: 25 },
+        alignment: "right",
+      });
+    }
 
-
+    // PDF file path
     const dirPath = path.join(
       __dirname,
       "./../public/FINANCEDOCS",
       `${travel.employee.EMPNO}`,
       `${movement.MOVEMENTID}`
     );
-    console.log(dirPath, "============== dirPath ==================");
+
     const filePath = path.join(
       dirPath,
       `${travel.employee.EMPNO}-${movement.MOVEMENTID}-${moment(
@@ -263,50 +209,23 @@ if (qrCode) {
       ).format("DD-MM-YYYY")}.pdf`
     );
 
-    // Check if the directory exists, create it if not
     if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true }); // recursive: true ensures parent directories are created if needed
+      fs.mkdirSync(dirPath, { recursive: true });
     }
-    /*
-  // Check if the file already exists
-  if (fs.existsSync(filePath)) {
-    console.log("File already exists:", filePath);
-    return `https://smarthr.johnsonliftsltd.com:3001/api/public/${travel.employee.EMPNO}-${moment(
-      expenceDetails[0].createdAt
-    ).format("DD-MM-YYYY")}.pdf`;
-  } else {
-    // Now write the PDF
+
     const pdfDoc = printer.createPdfKitDocument(docDefinition);
     pdfDoc.pipe(fs.createWriteStream(filePath));
-    pdfDoc.end(); // Ensure PDF is properly written
-    console.log("PDF created successfully:", filePath);
-    console.log(baseURL);
-    return `https://smarthr.johnsonliftsltd.com:3001/api/public/${travel.employee.EMPNO}-${moment(
-      expenceDetails[0].createdAt
-    ).format("DD-MM-YYYY")}.pdf`;
-  }
-*/
-    // Now write the PDF
-    const pdfDoc = printer.createPdfKitDocument(docDefinition);
-    pdfDoc.pipe(fs.createWriteStream(filePath));
-    pdfDoc.end(); // Ensure PDF is properly written
-    console.log("PDF created successfully:", filePath);
-    console.log(baseURL);
+    pdfDoc.end();
+
     return `https://smarthr.johnsonliftsltd.com:3001/api/public/FINANCEDOCS/${
       travel.employee.EMPNO
     }/${movement.MOVEMENTID}/${travel.employee.EMPNO}-${
       movement.MOVEMENTID
     }-${moment(expenceDetails[0].createdAt).format("DD-MM-YYYY")}.pdf`;
   } catch (error) {
-    console.log(
-      error,
-      "========================Error generating PDF==========="
-    );
+    console.log(error, "Error generating PDF");
     return error;
   }
 };
 
 module.exports = { generateTravelSummaryPDF };
-
-
-
