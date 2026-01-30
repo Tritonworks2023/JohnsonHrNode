@@ -23,7 +23,7 @@ const EmployeeMaster = require("../../models/employeeMasterModel");
 const LeaveDetail = require("../../models/leaveDetailModel");
 const BranchMaster = require("../../models/branchMasterModel");
 const Holiday = require("../../models/holidayModel");
-const { TravelDesk } = require("../../models/travelDeskModel");
+const { TravelDesk, Expense } = require("../../models/travelDeskModel");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
 const Permission = require("../../models/permissionModel");
@@ -167,7 +167,7 @@ function validateRequiredFields(
   EMPNO,
   LVCODE,
   BRCODE,
-  ENTRYBY
+  ENTRYBY,
 ) {
   if (!LVFRMDT || !LVTODT || !EMPNO || !LVCODE || !BRCODE || !ENTRYBY) {
     return "LVFRMDT, LVTODT, EMPNO, LVCODE, BRCODE, and ENTRYBY are required fields";
@@ -191,7 +191,7 @@ async function validateHolidayDate(
   parsedLVTODT,
   BRCODE,
   lvYear,
-  lvToYear
+  lvToYear,
 ) {
   const isHoliday =
     (await isHolidayDate(parsedLVFRMDT, BRCODE, lvYear)) ||
@@ -353,7 +353,7 @@ const getTravelTime = async (fromLat, fromLng, toLat, toLng, transit_mode) => {
           // transit_mode: transit_mode.toLowerCase(),
           key: googleMapKey,
         },
-      }
+      },
     );
     console.log("=========response", response);
     if (response.data.status === "OK") {
@@ -374,7 +374,7 @@ router.post("/apply-movement", async (req, res) => {
   try {
     console.log(
       "======req.body apply-movement =======================",
-      req.body
+      req.body,
     );
     const {
       EMPNO,
@@ -426,7 +426,7 @@ router.post("/apply-movement", async (req, res) => {
       EMPNO,
       LVCODE,
       BRCODE,
-      ENTRYBY
+      ENTRYBY,
     );
 
     if (requiredFieldsValidation) {
@@ -491,8 +491,9 @@ router.post("/apply-movement", async (req, res) => {
         FROMLOCLAT,
         FROMLOCLNG,
         TOLOCLAT,
-        TOLOCLNG
+        TOLOCLNG,
       );
+      /*
       travelTimeInHours = (
         await getTravelTime(
           FROMLOCLAT,
@@ -503,6 +504,7 @@ router.post("/apply-movement", async (req, res) => {
         )
       ).toFixed(2);
       console.log("========travelTimeInHours", travelTimeInHours);
+      */
       const gradeEligibility =
         travelEligibility[employeeGrade] || travelEligibility["Trainee"]; // Default to 'Trainee' if grade not found
 
@@ -510,17 +512,17 @@ router.post("/apply-movement", async (req, res) => {
 
       console.log(
         "===================================employeeGrade=====================",
-        employeeGrade
+        employeeGrade,
       );
       console.log(
         "===================================gradeEligibility=====================",
-        gradeEligibility
+        gradeEligibility,
       );
 
       if ((employeeGrade === "E7" || employeeGrade === "E6") && !DEVIATION) {
         if (
           gradeEligibility.mode === "Air" &&
-          travelTimeInHours < 10 &&
+          // travelTimeInHours < 10 &&    // commented due to map key replacement issue  on 17-12-2025 by pradeep
           JOURNEYMODE !== "BUS" &&
           JOURNEYMODE !== "TRAIN" &&
           JOURNEYMODE !== "CAR"
@@ -537,12 +539,13 @@ router.post("/apply-movement", async (req, res) => {
         } else {
           JOURNEYMODE1 = JOURNEYMODE;
         }
-        if (travelTimeInHours < 14 && gradeEligibility.mode === JOURNEYMODE1)
+        if (gradeEligibility.mode === JOURNEYMODE1)
+          //travelTimeInHours < 14 &&
           // JOURNEYMODE --- "Air"
-          isValidJourney = false;
+          isValidJourney = true; // isValidJourney = false;     -- set as valid journey for E4 grade on mode AIR by sp on 30-01-2026
       } else if (employeeGrade === "E3" && !DEVIATION) {
         if (
-          travelTimeInHours < 16 &&
+          // travelTimeInHours < 16 &&
           gradeEligibility.mode === "Air" &&
           JOURNEYMODE !== "BUS" &&
           JOURNEYMODE !== "TRAIN" &&
@@ -570,7 +573,7 @@ router.post("/apply-movement", async (req, res) => {
       if (DEVIATION) {
         if (!isValidJourney) {
           DEVIATIONDATA.GRADE = employeeGrade;
-          DEVIATIONDATA.travelTimeInHours = travelTimeInHours;
+          // DEVIATIONDATA.travelTimeInHours = travelTimeInHours;
           DEVIATIONDATA.gradeEligibility = gradeEligibility;
           DEVIATIONDATA.MODE = JOURNEYMODE;
         }
@@ -589,7 +592,7 @@ router.post("/apply-movement", async (req, res) => {
     const isHolidayValidation = await validateHolidayDate(
       parsedLVFRMDT,
       parsedLVTODT,
-      BRCODE
+      BRCODE,
     );
 
     if (isHolidayValidation) {
@@ -668,7 +671,7 @@ router.post("/apply-movement", async (req, res) => {
     const uniqueCode = `${timestamp}${incrementStr}`;
 
     const code = await qrcode.toDataURL(
-      JSON.stringify({ MOVEMENTID: uniqueCode, EMPNO: EMPNO })
+      JSON.stringify({ MOVEMENTID: uniqueCode, EMPNO: EMPNO }),
     );
 
     let insertObj = {
@@ -719,7 +722,7 @@ router.post("/apply-movement", async (req, res) => {
       if (CARRANGEMENTS) {
         insertObj.CARRANGEMENTS = CARRANGEMENTS;
       }
-      insertObj.TRAVELTIME = travelTimeInHours;
+      insertObj.TRAVELTIME = 0; //travelTimeInHours;
       insertObj.DEPARTUREDT = moment(DEPARTUREDT, "DD-MM-YYYY").toDate();
       insertObj.RETURNDT = moment(RETURNDT, "DD-MM-YYYY").toDate();
       insertObj.DEVIATION = DEVIATION;
@@ -727,7 +730,18 @@ router.post("/apply-movement", async (req, res) => {
       insertObj.DEVIATIONDATA = DEVIATIONDATA;
       insertObj.LODGINGPAIDBY = LODGINGPAIDBY;
     }
-
+    // CHECK DUPLICATE MOVEMENTID
+    const duplicateMovement = await LeaveDetail.findOne({
+      MOVEMENTID: uniqueCode,
+    });
+    // if (duplicateMovement) {   // commented on 27-02-2025 due to live error
+    //   return res.status(500).json({
+    //     Status: "Failed",
+    //     Message: "High Traffic!!, please try again",
+    //     Data: {},
+    //     Code: 500,
+    //   });
+    // }
     const newLeave = new LeaveDetail(insertObj);
     await newLeave.save();
     const notificationData = {
@@ -779,10 +793,24 @@ router.post("/my-movements-list", async (req, res) => {
     //  leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
     //   ENTRYDT: -1,
     // });
+    const formattedLeaveList = [];
+    for (const item of leaveList) {
+      const getdDataFromExpense = await Expense.find({
+        travelId: item.travelId,
+      });
+      const formattedItem = {
+        ...item.toObject(),
+        OS_STATUS:
+          getdDataFromExpense.length > 0
+            ? getdDataFromExpense[0].finalApproval.status
+            : "PENDING",
+      };
+      formattedLeaveList.push(formattedItem);
+    }
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
-      Data: leaveList,
+      Data: formattedLeaveList, // MODIFIED ON 17-12-2025 BY PRADEEP
       Code: 200,
     });
   } catch (error) {
@@ -882,7 +910,7 @@ router.post("/approvals-list", async (req, res) => {
           JOBSPECIFIC: leave.JOBSPECIFIC,
         };
         responseData.push(formattedLeave);
-      })
+      }),
     );
 
     responseData.sort((a, b) => {
@@ -1243,9 +1271,8 @@ router.post("/claim-summary", async (req, res) => {
 
     console.log(
       result,
-      "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
+      "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&",
     );
-
 
     if (!result.length) {
       return res.status(404).json({
@@ -1255,28 +1282,41 @@ router.post("/claim-summary", async (req, res) => {
       });
     }
 
-  let movement = result[0].movement;
-  let employee = result[0].employee;
+    let movement = result[0].movement;
 
+    // ✅ Generate QR code if missing
+    if (movement && !movement.qrcode && movement.MOVEMENTID) {
+      // Get current timestamp YYYYMM
+      const timestamp = moment().format("YYYYMM");
 
-  // Generate QR code
-  const qrDataUrl = await qrcode.toDataURL(JSON.stringify({ MOVEMENTID:movement.MOVEMENTID, EMPNO: movement.EMPNO,EMPGRADE:employee.GRADE,
-    BRCODE: movement.BRCODE,
-    EMPNAME: movement.EMPNAME,
-    FROMDATE: moment(movement.LVFRMDT).format("DD-MM-YYYY"),
-    TODATE: moment(movement.LVTODT).format("DD-MM-YYYY"),
-    JOURNEYMODE: movement.JOURNEYMODE, }));
+      // Extract last sequence from MOVEMENTID
+      let lastSeqNo = 0;
+      const lastId = movement.MOVEMENTID.toString();
+      const lastTimestamp = lastId.slice(0, 6);
+      const lastNumber = parseInt(lastId.slice(6), 10);
 
-  // Save to DB
-  await LeaveDetail.updateOne(
-    { _id: movement._id },
-    { $set: { qrcode: qrDataUrl } }
-  );
+      if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
+        lastSeqNo = lastNumber;
+      }
 
-  // Attach to object for PDF generation
-  movement.qrcode = qrDataUrl;
-//}
+      // Increment and format
+      const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
+      const uniqueCode = `${timestamp}${incrementStr}`;
 
+      // Generate QR code
+      const qrDataUrl = await qrcode.toDataURL(
+        JSON.stringify({ MOVEMENTID: uniqueCode }),
+      );
+
+      // Save to DB
+      await LeaveDetail.updateOne(
+        { _id: movement._id },
+        { $set: { qrcode: qrDataUrl } },
+      );
+
+      // Attach to object for PDF generation
+      movement.qrcode = qrDataUrl;
+    }
 
     const summaryData = await generateTravelSummaryPDF(result[0]);
 
@@ -1435,7 +1475,7 @@ router.post("/claim-detail-summary", async (req, res) => {
 
     console.log(
       result,
-      "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
+      "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&",
     );
 
     const summaryData = await generateTravelDetailSummaryPDF(result[0]);
@@ -1510,7 +1550,7 @@ router.post("/ack-claim", async (req, res) => {
         Status: "Failed",
         Message: `Documents already collected on ${
           moment(leaveRequest?.document_submitted_at).format(
-            "DD-MM-YYYY HH:mm"
+            "DD-MM-YYYY HH:mm",
           ) || ""
         }`,
         Data: leaveRequest,
@@ -1528,7 +1568,7 @@ router.post("/ack-claim", async (req, res) => {
           document_submitted_by: document_submitted_by,
         },
       },
-      { new: true }
+      { new: true },
     );
 
     return res.json({
@@ -1545,6 +1585,61 @@ router.post("/ack-claim", async (req, res) => {
       Data: {},
       Code: 500,
     });
+  }
+});
+
+//status of the movement id
+router.post("/movement-status", async (req, res) => {
+  try {
+    const movementId = req.body.movementId;
+    const leaveRequest = await LeaveDetail.findById(movementId);
+
+    if (!leaveRequest) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Leave request not found",
+        Data: {},
+      });
+    }
+    const query = "GET_TOUREXP_PROCESSDT(:JLS_TEM_JSEQNO) PROCESSDT";
+    const bindParams = { JLS_TEM_JSEQNO: leaveRequest.MOVEMENTID };
+    const result = await executeOracleQuery(query, bindParams);
+    const getdDataFromExpense = await Expense.findOne({
+      travelId: leaveRequest.travelId,
+      "finalApproval.status": "APPROVED",
+    });
+    const status = [
+      { label: "Claim Submitted Date", value: leaveRequest.createdAt },
+      {
+        label: "Approved Date",
+        value: getdDataFromExpense
+          ? getdDataFromExpense.finalApproval.claimApprovedAt
+          : null,
+      },
+      {
+        label: "Doc Ack DT",
+        value: leaveRequest.document_submitted_at || null,
+      },
+      { label: "Settled Date", value: null },
+    ];
+    if (!leaveRequest) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Data not found",
+        Data: [],
+      });
+    }
+    res.json({
+      Status: "Success",
+      Message: "Data retrieved",
+      Data: status,
+      Code: 200,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res
+      .status(500)
+      .json({ Status: "Failed", Message: error.message, Data: [], Code: 500 });
   }
 });
 
