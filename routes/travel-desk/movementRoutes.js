@@ -24,6 +24,7 @@ const LeaveDetail = require("../../models/leaveDetailModel");
 const BranchMaster = require("../../models/branchMasterModel");
 const Holiday = require("../../models/holidayModel");
 const { TravelDesk, Expense } = require("../../models/travelDeskModel");
+const conuterModel = require("../../models/movement_counterModel");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
 const Permission = require("../../models/permissionModel");
@@ -645,33 +646,43 @@ router.post("/apply-movement", async (req, res) => {
 
     const timestamp = moment().format("YYYYMM");
 
-    const lastRecord = await LeaveDetail.findOne({
-      TYPE: "MOVEMENT",
-      LVCODE: "OS",
-    }).sort({ _id: -1 });
+    // const lastRecord = await LeaveDetail.findOne({
+    //   TYPE: "MOVEMENT",
+    //   LVCODE: "OS",
+    // }).sort({ _id: -1 });
 
-    let lastSeqNo = 0;
+    // let lastSeqNo = 0;
 
-    if (
-      lastRecord &&
-      lastRecord.MOVEMENTID &&
-      lastRecord.MOVEMENTID.toString().length >= 10
-    ) {
-      const lastId = lastRecord.MOVEMENTID.toString();
-      const lastTimestamp = lastId.slice(0, 6);
-      const lastNumber = parseInt(lastId.slice(6), 10);
+    // if (
+    //   lastRecord &&
+    //   lastRecord.MOVEMENTID &&
+    //   lastRecord.MOVEMENTID.toString().length >= 10
+    // ) {
+    //   const lastId = lastRecord.MOVEMENTID.toString();
+    //   const lastTimestamp = lastId.slice(0, 6);
+    //   const lastNumber = parseInt(lastId.slice(6), 10);
 
-      if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
-        lastSeqNo = lastNumber;
-      }
-    }
+    //   if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
+    //     lastSeqNo = lastNumber;
+    //   }
+    // }
 
-    // Increment and format
-    const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
-    const uniqueCode = `${timestamp}${incrementStr}`;
+    // // Increment and format
+    // const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
+    // const uniqueCode = `${timestamp}${incrementStr}`;
+
+    const counterId = `MOVEMENT_OS_${timestamp}`;
+
+    const counter = await conuterModel.findOneAndUpdate(
+      { _id: counterId },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true },
+    );
+
+    const movementId = `${timestamp}${counter.seq.toString().padStart(4, "0")}`;
 
     const code = await qrcode.toDataURL(
-      JSON.stringify({ MOVEMENTID: uniqueCode, EMPNO: EMPNO }),
+      JSON.stringify({ MOVEMENTID: movementId, EMPNO: EMPNO }),
     );
 
     let insertObj = {
@@ -706,7 +717,7 @@ router.post("/apply-movement", async (req, res) => {
       ADVANCEAMTFLG,
       APPROVER: userExists.REPMGR,
       JOBSPECIFIC,
-      MOVEMENTID: uniqueCode,
+      MOVEMENTID: movementId, // uniqueCode,
       FRMSESSION, // added for DO
       TOSESSION,
       APPNAME: APPNAME,
@@ -731,9 +742,9 @@ router.post("/apply-movement", async (req, res) => {
       insertObj.LODGINGPAIDBY = LODGINGPAIDBY;
     }
     // CHECK DUPLICATE MOVEMENTID
-    const duplicateMovement = await LeaveDetail.findOne({
-      MOVEMENTID: uniqueCode,
-    });
+    // const duplicateMovement = await LeaveDetail.findOne({
+    //   MOVEMENTID: uniqueCode,
+    // });
     // if (duplicateMovement) {   // commented on 27-02-2025 due to live error
     //   return res.status(500).json({
     //     Status: "Failed",
