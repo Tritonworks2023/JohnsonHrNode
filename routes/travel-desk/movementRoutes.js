@@ -421,6 +421,22 @@ router.post("/apply-movement", async (req, res) => {
       });
     }
 
+    // check user
+
+    const userNotActive = await EmployeeMaster.findOne({
+      ECODE: EMPNO,
+      STATUS: "I",
+    });
+
+    if (userNotActive) {
+      return res.status(403).json({
+        Status: "Failed",
+        Message: "User with provided EMPNO is not active.Please Contact Admin",
+        Data: {},
+        Code: 403,
+      });
+    }
+
     const requiredFieldsValidation = validateRequiredFields(
       LVFRMDT,
       LVTODT,
