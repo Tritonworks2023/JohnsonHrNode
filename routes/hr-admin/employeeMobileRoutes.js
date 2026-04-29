@@ -349,15 +349,15 @@ router.post("/login", async (req, res) => {
         Code: 400,
       });
     }
-    if (user.LOCCODE == "NOLOC") {
-      return res.status(400).json({
-        Status: "Failed",
-        Message:
-          "Your location Should be Field/Non Field ,Kindly Contact Branch HR",
-        Data: {},
-        Code: 400,
-      });
-    }
+    // if (user.LOCCODE == "NOLOC") {
+    //   return res.status(400).json({
+    //     Status: "Failed",
+    //     Message:
+    //       "Your location Should be Field/Non Field ,Kindly Contact Branch HR",
+    //     Data: {},
+    //     Code: 400,
+    //   });
+    // }
     console.log("==========user.DEVICEID", user.DEVICEID);
     if (user.DEVICEID == "" || user.DEVICEID == undefined) {
       user.DEVICEID = req.body.device_id;
