@@ -698,7 +698,16 @@ router.post("/apply-movement", async (req, res) => {
     const movementId = `${timestamp}${counter.seq.toString().padStart(4, "0")}`;
 
     const code = await qrcode.toDataURL(
-      JSON.stringify({ MOVEMENTID: movementId, EMPNO: EMPNO }),
+      JSON.stringify({
+        MOVEMENTID: movementId,
+        EMPNO: EMPNO,
+        GRADE: userExists.GRADE,
+        BRCODE: BRCODE,
+        EMPNAME: userExists.ENAME,
+        LVFRMDT: parsedLVFRMDT,
+        LVTODT: parsedLVTODT,
+        JOURNEYMODE: JOURNEYMODE,
+      }),
     );
 
     let insertObj = {
