@@ -701,11 +701,11 @@ router.post("/apply-movement", async (req, res) => {
       JSON.stringify({
         MOVEMENTID: movementId,
         EMPNO: EMPNO,
-        GRADE: userExists.GRADE,
+        EMPGRADE: userExists.GRADE,
         BRCODE: BRCODE,
         EMPNAME: userExists.ENAME,
-        LVFRMDT: parsedLVFRMDT,
-        LVTODT: parsedLVTODT,
+        FROMDATE: new Date(parsedLVFRMDT).toLocaleDateString(),
+        TODATE: new Date(parsedLVTODT).toLocaleDateString(),
         JOURNEYMODE: JOURNEYMODE,
       }),
     );
