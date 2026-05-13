@@ -28,6 +28,7 @@ const conuterModel = require("../../models/movement_counterModel");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
 const Permission = require("../../models/permissionModel");
+const { generateconveyanceSummaryPDF } = require("./conveyence_pdf");
 //    'E3': { mode: 'Car', class: ['Car', 'III AC', 'CC', 'AC Bus'], conveyance: 'Taxi/Auto', remarks: 'By Car if travel is more than 16 hrs' },
 //    'E7': { mode: 'Car', class: ['Car', 'II/III AC', 'CC', 'AC Bus'], conveyance: 'Taxi', remarks: 'By Car if travel is more than 10 hrs' },
 //    'E6': { mode: 'Car', class: ['Car', 'II/III AC', 'CC', 'AC Bus'], conveyance: 'Taxi', remarks: 'By Car if travel is more than 10 hrs' },
@@ -1676,6 +1677,180 @@ router.post("/movement-status", async (req, res) => {
     res
       .status(500)
       .json({ Status: "Failed", Message: error.message, Data: [], Code: 500 });
+  }
+});
+
+router.post("/conveyane-summary", async (req, res) => {
+  try {
+    const { movement_id, EMPNO, endDate, startDate } = req.body;
+
+    console.log(
+      req.body,
+      "=====================req.body===================",
+    );
+
+    const result = await TravelDesk.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(movement_id),
+        },
+      },
+
+      {
+        $lookup: {
+          from: "expenses",
+          localField: "_id",
+          foreignField: "travelId",
+          as: "expenceDetails",
+        },
+      },
+
+      {
+        $unwind: {
+          path: "$expenceDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $match:
+          endDate && startDate
+            ? {
+                "expenceDetails.createdAt": {
+                  $gte: new Date(startDate),
+                  $lte: new Date(endDate),
+                },
+              }
+            : {},
+      },
+
+      {
+        $lookup: {
+          from: "employeemasters",
+          localField: "employee",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "leavedetails",
+          localField: "movement",
+          foreignField: "_id",
+          as: "movement",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "accommodations",
+          localField: "accommodation",
+          foreignField: "_id",
+          as: "accommodation",
+        },
+      },
+
+      {
+        $addFields: {
+          employee: {
+            $arrayElemAt: ["$employee", 0],
+          },
+        },
+      },
+
+      {
+        $unwind: {
+          path: "$movement",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $group: {
+          _id: "$_id",
+
+          expenceDetails: {
+            $push: "$expenceDetails",
+          },
+
+          accommodation: {
+            $first: "$accommodation",
+          },
+
+          brcode: {
+            $first: "$brcode",
+          },
+
+          movement: {
+            $first: "$movement",
+          },
+
+          employee: {
+            $first: "$employee",
+          },
+
+          travelId: {
+            $first: "$travelId",
+          },
+
+          accommodationDocuments: {
+            $first: "$accommodationDocuments",
+          },
+
+          ticketDocuments: {
+            $first: "$ticketDocuments",
+          },
+
+          status: {
+            $first: "$status",
+          },
+
+          __v: {
+            $first: "$__v",
+          },
+        },
+      },
+    ]);
+
+    console.log(
+      result,
+      "=====================RESULT=====================",
+    );
+
+    if (!result.length) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "No movement found",
+        Code: 404,
+      });
+    }
+
+    // =========================
+    // GENERATE PDF
+    // =========================
+    const summaryData =
+      await generateconveyanceSummaryPDF(result[0]);
+
+    return res.status(200).json({
+      Status: "Success",
+      Message: "Conveyance Summary Retrieved",
+      Code: 200,
+      Data: summaryData,
+      result: result[0],
+    });
+  } catch (error) {
+    console.error(
+      "Error retrieving conveyance summary:",
+      error,
+    );
+
+    return res.status(500).json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Code: 500,
+      error: error.message,
+    });
   }
 });
 
