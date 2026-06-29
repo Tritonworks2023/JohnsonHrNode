@@ -306,13 +306,13 @@ const getCityClassification = (city) => {
   const normalizedCity = city.trim().toLowerCase();
   if (
     cityClassification.Metros.some(
-      (c) => c.trim().toLowerCase() === normalizedCity
+      (c) => c.trim().toLowerCase() === normalizedCity,
     )
   ) {
     return "METROS";
   } else if (
     cityClassification.ClassA.some(
-      (c) => c.trim().toLowerCase() === normalizedCity
+      (c) => c.trim().toLowerCase() === normalizedCity,
     )
   ) {
     return "CLASS_A";
@@ -336,7 +336,7 @@ const getGradeKey = (grade) => {
   const gradeKey = gradeSplit[0];
   const sGrades = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"];
   const tGrades = ["T1", "T2", "T3", "T4", "T5", "T6"];
-  const traineeGrades = ["A", "S", "D", "I", "W", "F", "G"];
+  const traineeGrades = ["A", "S", "D", "I", "W", "F", "G", "P"];
   if (sGrades.includes(grade)) return "S";
   if (tGrades.includes(grade)) return "T";
   if (traineeGrades.includes(gradeKey)) return "Trainee";
@@ -436,7 +436,7 @@ const validateBoardingExpense = (
   grade,
   amount,
   attachments,
-  totalDuration
+  totalDuration,
 ) => {
   const cityClass = getCityClassification(city);
   const gradeKey = getGradeKey(grade);
@@ -471,14 +471,14 @@ const validateLodgingExpense = (
   grade,
   amount,
   attachments,
-  totalDuration
+  totalDuration,
 ) => {
   const cityClass = getCityClassification(city);
   const gradeKey = getGradeKey(grade);
   const maxAmount = eligibilityData[cityClass]["LODGING"][gradeKey];
   console.log(
     "=======eligibilityData-=====",
-    eligibilityData[cityClass]["LODGING"][gradeKey]
+    eligibilityData[cityClass]["LODGING"][gradeKey],
   );
   console.log("=======gradeKey", gradeKey);
   console.log("=======cityClass", cityClass);
@@ -499,14 +499,14 @@ const validateCompositeExpense = (
   grade,
   amount,
   attachments,
-  totalDuration
+  totalDuration,
 ) => {
   const cityClass = getCityClassification(city);
   const gradeKey = getGradeKey(grade);
   const maxAmount = eligibilityData[cityClass]["COMPOSITE"][gradeKey];
   console.log(
     "=======eligibilityData-=====",
-    eligibilityData[cityClass]["COMPOSITE"][gradeKey]
+    eligibilityData[cityClass]["COMPOSITE"][gradeKey],
   );
   console.log("=======gradeKey", gradeKey);
   console.log("=======cityClass", cityClass);
@@ -530,7 +530,7 @@ const validateConveyanceExpense = (
   grade,
   amount,
   attachments,
-  totalDuration
+  totalDuration,
 ) => {
   let maxAmount;
 
