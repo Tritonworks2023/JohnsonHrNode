@@ -466,6 +466,17 @@ router.post("/apply-movement", async (req, res) => {
       });
     }
 
+    // validate brcode if user transferred  - added by sp on 08-07-2026
+
+    if (userExists.BRCODE !== BRCODE) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Invalid barcode. Please log in again.",
+        Data: {},
+        Code: 400,
+      });
+    }
+
     const parsedLVFRMDT = moment(LVFRMDT, "DD-MM-YYYY").toDate();
     const parsedLVTODT = moment(LVTODT, "DD-MM-YYYY").toDate();
 
@@ -1684,10 +1695,7 @@ router.post("/conveyane-summary", async (req, res) => {
   try {
     const { movement_id, EMPNO, endDate, startDate } = req.body;
 
-    console.log(
-      req.body,
-      "=====================req.body===================",
-    );
+    console.log(req.body, "=====================req.body===================");
 
     const result = await TravelDesk.aggregate([
       {
@@ -1813,10 +1821,7 @@ router.post("/conveyane-summary", async (req, res) => {
       },
     ]);
 
-    console.log(
-      result,
-      "=====================RESULT=====================",
-    );
+    console.log(result, "=====================RESULT=====================");
 
     if (!result.length) {
       return res.status(404).json({
@@ -1829,8 +1834,7 @@ router.post("/conveyane-summary", async (req, res) => {
     // =========================
     // GENERATE PDF
     // =========================
-    const summaryData =
-      await generateconveyanceSummaryPDF(result[0]);
+    const summaryData = await generateconveyanceSummaryPDF(result[0]);
 
     return res.status(200).json({
       Status: "Success",
@@ -1840,10 +1844,7 @@ router.post("/conveyane-summary", async (req, res) => {
       result: result[0],
     });
   } catch (error) {
-    console.error(
-      "Error retrieving conveyance summary:",
-      error,
-    );
+    console.error("Error retrieving conveyance summary:", error);
 
     return res.status(500).json({
       Status: "Failed",
