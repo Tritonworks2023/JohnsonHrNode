@@ -12,6 +12,9 @@ const fs = require("fs");
 const axios = require("axios");
 const { executeOracleQuery } = require("../../config/oracle");
 const mongoose = require("mongoose");
+const { generateTravelSummaryPDF } = require("./generate_pdf");
+const { generateTravelDetailSummaryPDF } = require("../travel-desk/detail_pdf");
+const qrcode = require("qrcode");
 
 const moment = require("moment");
 
@@ -20,9 +23,12 @@ const EmployeeMaster = require("../../models/employeeMasterModel");
 const LeaveDetail = require("../../models/leaveDetailModel");
 const BranchMaster = require("../../models/branchMasterModel");
 const Holiday = require("../../models/holidayModel");
-const { TravelDesk } = require("../../models/travelDeskModel");
+const { TravelDesk, Expense } = require("../../models/travelDeskModel");
+const conuterModel = require("../../models/movement_counterModel");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
+const Permission = require("../../models/permissionModel");
+const { generateconveyanceSummaryPDF } = require("./conveyence_pdf");
 //    'E3': { mode: 'Car', class: ['Car', 'III AC', 'CC', 'AC Bus'], conveyance: 'Taxi/Auto', remarks: 'By Car if travel is more than 16 hrs' },
 //    'E7': { mode: 'Car', class: ['Car', 'II/III AC', 'CC', 'AC Bus'], conveyance: 'Taxi', remarks: 'By Car if travel is more than 10 hrs' },
 //    'E6': { mode: 'Car', class: ['Car', 'II/III AC', 'CC', 'AC Bus'], conveyance: 'Taxi', remarks: 'By Car if travel is more than 10 hrs' },
@@ -163,7 +169,7 @@ function validateRequiredFields(
   EMPNO,
   LVCODE,
   BRCODE,
-  ENTRYBY
+  ENTRYBY,
 ) {
   if (!LVFRMDT || !LVTODT || !EMPNO || !LVCODE || !BRCODE || !ENTRYBY) {
     return "LVFRMDT, LVTODT, EMPNO, LVCODE, BRCODE, and ENTRYBY are required fields";
@@ -187,7 +193,7 @@ async function validateHolidayDate(
   parsedLVTODT,
   BRCODE,
   lvYear,
-  lvToYear
+  lvToYear,
 ) {
   const isHoliday =
     (await isHolidayDate(parsedLVFRMDT, BRCODE, lvYear)) ||
@@ -337,7 +343,7 @@ router.use(formatDateMiddleware);
 //     }
 // });
 
-const getTravelTime = async (fromLat, fromLng, toLat, toLng) => {
+const getTravelTime = async (fromLat, fromLng, toLat, toLng, transit_mode) => {
   try {
     const response = await axios.get(
       `https://maps.googleapis.com/maps/api/distancematrix/json`,
@@ -345,9 +351,11 @@ const getTravelTime = async (fromLat, fromLng, toLat, toLng) => {
         params: {
           origins: `${fromLat},${fromLng}`,
           destinations: `${toLat},${toLng}`,
+          // mode: "transit",
+          // transit_mode: transit_mode.toLowerCase(),
           key: googleMapKey,
         },
-      }
+      },
     );
     console.log("=========response", response);
     if (response.data.status === "OK") {
@@ -368,7 +376,7 @@ router.post("/apply-movement", async (req, res) => {
   try {
     console.log(
       "======req.body apply-movement =======================",
-      req.body
+      req.body,
     );
     const {
       EMPNO,
@@ -401,7 +409,34 @@ router.post("/apply-movement", async (req, res) => {
       DEVIATIONDESC,
       LODGINGPAIDBY,
       JOBSPECIFIC,
+      APPNAME,
     } = req.body;
+
+    if (APPNAME !== "MYTRAVEL") {
+      //&& LVCODE === "OS" removed the validation to not allow any records from hr app
+      return res.status(200).json({
+        Status: "Success",
+        Message: "Movement applied successfully",
+        Data: {},
+        Code: 200,
+      });
+    }
+
+    // check user
+
+    const userNotActive = await EmployeeMaster.findOne({
+      ECODE: EMPNO,
+      STATUS: "I",
+    });
+
+    if (userNotActive) {
+      return res.status(403).json({
+        Status: "Failed",
+        Message: "User with provided EMPNO is not active.Please Contact Admin",
+        Data: {},
+        Code: 403,
+      });
+    }
 
     const requiredFieldsValidation = validateRequiredFields(
       LVFRMDT,
@@ -409,7 +444,7 @@ router.post("/apply-movement", async (req, res) => {
       EMPNO,
       LVCODE,
       BRCODE,
-      ENTRYBY
+      ENTRYBY,
     );
 
     if (requiredFieldsValidation) {
@@ -431,6 +466,17 @@ router.post("/apply-movement", async (req, res) => {
       });
     }
 
+    // validate brcode if user transferred  - added by sp on 08-07-2026
+
+    if (userExists.BRCODE !== BRCODE) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "You Recently Transferred from another branch. Please log in again.",
+        Data: {},
+        Code: 400,
+      });
+    }
+
     const parsedLVFRMDT = moment(LVFRMDT, "DD-MM-YYYY").toDate();
     const parsedLVTODT = moment(LVTODT, "DD-MM-YYYY").toDate();
 
@@ -449,6 +495,22 @@ router.post("/apply-movement", async (req, res) => {
         Code: 400,
       });
     }
+
+    // can't apply movement for more than 90 days
+
+    const ninetyDaysAgo = moment().subtract(90, "days");
+
+    if (moment(LVFRMDT, "DD-MM-YYYY").isBefore(ninetyDaysAgo)) {
+      console.log("Date is older than 90 days.");
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Cant Apply Movement for more than 90 days",
+        Code: 400,
+      });
+    } else {
+      console.log("Date is within the last 90 days.");
+    }
+
     let DEVIATIONDATA = {};
     let travelTimeInHours = 0;
     if (LVCODE === "OS") {
@@ -458,12 +520,20 @@ router.post("/apply-movement", async (req, res) => {
         FROMLOCLAT,
         FROMLOCLNG,
         TOLOCLAT,
-        TOLOCLNG
+        TOLOCLNG,
       );
+      /*
       travelTimeInHours = (
-        await getTravelTime(FROMLOCLAT, FROMLOCLNG, TOLOCLAT, TOLOCLNG)
+        await getTravelTime(
+          FROMLOCLAT,
+          FROMLOCLNG,
+          TOLOCLAT,
+          TOLOCLNG,
+          JOURNEYMODE
+        )
       ).toFixed(2);
       console.log("========travelTimeInHours", travelTimeInHours);
+      */
       const gradeEligibility =
         travelEligibility[employeeGrade] || travelEligibility["Trainee"]; // Default to 'Trainee' if grade not found
 
@@ -471,15 +541,21 @@ router.post("/apply-movement", async (req, res) => {
 
       console.log(
         "===================================employeeGrade=====================",
-        employeeGrade
+        employeeGrade,
       );
       console.log(
         "===================================gradeEligibility=====================",
-        gradeEligibility
+        gradeEligibility,
       );
 
       if ((employeeGrade === "E7" || employeeGrade === "E6") && !DEVIATION) {
-        if (gradeEligibility.mode === "Air" && travelTimeInHours < 10) {
+        if (
+          gradeEligibility.mode === "Air" &&
+          // travelTimeInHours < 10 &&    // commented due to map key replacement issue  on 17-12-2025 by pradeep
+          JOURNEYMODE !== "BUS" &&
+          JOURNEYMODE !== "TRAIN" &&
+          JOURNEYMODE !== "CAR"
+        ) {
           isValidJourney = false;
         }
       } else if (
@@ -492,11 +568,18 @@ router.post("/apply-movement", async (req, res) => {
         } else {
           JOURNEYMODE1 = JOURNEYMODE;
         }
-        if (travelTimeInHours < 14 && gradeEligibility.mode === JOURNEYMODE1)
+        if (gradeEligibility.mode === JOURNEYMODE1)
+          //travelTimeInHours < 14 &&
           // JOURNEYMODE --- "Air"
-          isValidJourney = false;
+          isValidJourney = true; // isValidJourney = false;     -- set as valid journey for E4 grade on mode AIR by sp on 30-01-2026
       } else if (employeeGrade === "E3" && !DEVIATION) {
-        if (travelTimeInHours < 16 && gradeEligibility.mode === "Air")
+        if (
+          // travelTimeInHours < 16 &&
+          gradeEligibility.mode === "Air" &&
+          JOURNEYMODE !== "BUS" &&
+          JOURNEYMODE !== "TRAIN" &&
+          JOURNEYMODE !== "CAR"
+        )
           isValidJourney = false;
       } else if (
         employeeGrade === "TE1" ||
@@ -519,7 +602,7 @@ router.post("/apply-movement", async (req, res) => {
       if (DEVIATION) {
         if (!isValidJourney) {
           DEVIATIONDATA.GRADE = employeeGrade;
-          DEVIATIONDATA.travelTimeInHours = travelTimeInHours;
+          // DEVIATIONDATA.travelTimeInHours = travelTimeInHours;
           DEVIATIONDATA.gradeEligibility = gradeEligibility;
           DEVIATIONDATA.MODE = JOURNEYMODE;
         }
@@ -538,7 +621,7 @@ router.post("/apply-movement", async (req, res) => {
     const isHolidayValidation = await validateHolidayDate(
       parsedLVFRMDT,
       parsedLVTODT,
-      BRCODE
+      BRCODE,
     );
 
     if (isHolidayValidation) {
@@ -549,6 +632,8 @@ router.post("/apply-movement", async (req, res) => {
       });
     }
 
+    // modified condition to apply OD in finance app even it applied in HR app 24-07-2025 by SP
+
     const existingLeave = await LeaveDetail.findOne({
       EMPNO,
       STATUS: "APPROVED",
@@ -556,7 +641,8 @@ router.post("/apply-movement", async (req, res) => {
       LVTODT: { $gte: moment(parsedLVFRMDT).toDate() },
     });
 
-    if (existingLeave) {
+    if (existingLeave && APPNAME === "MYTRAVEL") {
+      // ADDED THIS ON 24-07-2025 BY SP AS PER SUTHIR INSTRUCTION
       return res.status(400).json({
         Status: "Failed",
         Message:
@@ -565,8 +651,76 @@ router.post("/apply-movement", async (req, res) => {
       });
     }
 
+    // block movement if the employee is on leave
+
+    const checkLeave = await LeaveDetail.findOne({
+      EMPNO,
+      // STATUS: "APPROVED",
+      LVCODE: { $in: ["CL", "CO", "EL", "SL"] },
+      LVFRMDT: { $lte: moment(parsedLVTODT).toDate() },
+      LVTODT: { $gte: moment(parsedLVFRMDT).toDate() },
+    });
+    if (checkLeave) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Movement cannot be applied as the employee is on leave",
+        Code: 400,
+      });
+    }
     const applicationCount = (await LeaveDetail.countDocuments()) + 1;
     const LVAPNO = applicationCount;
+
+    // create sequence for movement number
+
+    const timestamp = moment().format("YYYYMM");
+
+    // const lastRecord = await LeaveDetail.findOne({
+    //   TYPE: "MOVEMENT",
+    //   LVCODE: "OS",
+    // }).sort({ _id: -1 });
+
+    // let lastSeqNo = 0;
+
+    // if (
+    //   lastRecord &&
+    //   lastRecord.MOVEMENTID &&
+    //   lastRecord.MOVEMENTID.toString().length >= 10
+    // ) {
+    //   const lastId = lastRecord.MOVEMENTID.toString();
+    //   const lastTimestamp = lastId.slice(0, 6);
+    //   const lastNumber = parseInt(lastId.slice(6), 10);
+
+    //   if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
+    //     lastSeqNo = lastNumber;
+    //   }
+    // }
+
+    // // Increment and format
+    // const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
+    // const uniqueCode = `${timestamp}${incrementStr}`;
+
+    const counterId = `MOVEMENT_OS_${timestamp}`;
+
+    const counter = await conuterModel.findOneAndUpdate(
+      { _id: counterId },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true },
+    );
+
+    const movementId = `${timestamp}${counter.seq.toString().padStart(4, "0")}`;
+
+    const code = await qrcode.toDataURL(
+      JSON.stringify({
+        MOVEMENTID: movementId,
+        EMPNO: EMPNO,
+        EMPGRADE: userExists.GRADE,
+        BRCODE: BRCODE,
+        EMPNAME: userExists.ENAME,
+        FROMDATE: new Date(parsedLVFRMDT).toLocaleDateString(),
+        TODATE: new Date(parsedLVTODT).toLocaleDateString(),
+        JOURNEYMODE: JOURNEYMODE,
+      }),
+    );
 
     let insertObj = {
       LVAPNO,
@@ -584,8 +738,8 @@ router.post("/apply-movement", async (req, res) => {
       BRCODE,
       ISESLVCODE: LVCODE,
       IISESLVCODE: LVCODE,
-      REASON: REASON || "",
-      STATUS: "PENDING",
+      REASON: REASON,
+      STATUS: req.body.ACTION ? req.body.ACTION : "PENDING",
       SOURCE: "JLSMART",
       ENTRYBY,
       ENTRYDT: moment().toDate(),
@@ -600,6 +754,11 @@ router.post("/apply-movement", async (req, res) => {
       ADVANCEAMTFLG,
       APPROVER: userExists.REPMGR,
       JOBSPECIFIC,
+      MOVEMENTID: movementId, // uniqueCode,
+      FRMSESSION, // added for DO
+      TOSESSION,
+      APPNAME: APPNAME,
+      qrcode: code,
     };
     if (LVCODE === "OS") {
       insertObj.FRMSESSION = FRMSESSION;
@@ -611,7 +770,7 @@ router.post("/apply-movement", async (req, res) => {
       if (CARRANGEMENTS) {
         insertObj.CARRANGEMENTS = CARRANGEMENTS;
       }
-      insertObj.TRAVELTIME = travelTimeInHours;
+      insertObj.TRAVELTIME = 0; //travelTimeInHours;
       insertObj.DEPARTUREDT = moment(DEPARTUREDT, "DD-MM-YYYY").toDate();
       insertObj.RETURNDT = moment(RETURNDT, "DD-MM-YYYY").toDate();
       insertObj.DEVIATION = DEVIATION;
@@ -619,6 +778,18 @@ router.post("/apply-movement", async (req, res) => {
       insertObj.DEVIATIONDATA = DEVIATIONDATA;
       insertObj.LODGINGPAIDBY = LODGINGPAIDBY;
     }
+    // CHECK DUPLICATE MOVEMENTID
+    // const duplicateMovement = await LeaveDetail.findOne({
+    //   MOVEMENTID: uniqueCode,
+    // });
+    // if (duplicateMovement) {   // commented on 27-02-2025 due to live error
+    //   return res.status(500).json({
+    //     Status: "Failed",
+    //     Message: "High Traffic!!, please try again",
+    //     Data: {},
+    //     Code: 500,
+    //   });
+    // }
     const newLeave = new LeaveDetail(insertObj);
     await newLeave.save();
     const notificationData = {
@@ -631,7 +802,8 @@ router.post("/apply-movement", async (req, res) => {
 
     return res.status(200).json({
       Status: "Success",
-      Message: "Leave applied successfully",
+      Message: "Movement applied successfully",
+      Data: newLeave,
       Code: 200,
     });
   } catch (error) {
@@ -644,7 +816,8 @@ router.post("/apply-movement", async (req, res) => {
 
 router.post("/my-movements-list", async (req, res) => {
   try {
-    const { EMPNO } = req.body;
+    const { EMPNO, APPNAME } = req.body;
+    console.log(req.body, "========req.body my-movements-list");
     if (!EMPNO) {
       return res.status(400).json({
         Status: "Failed",
@@ -653,11 +826,39 @@ router.post("/my-movements-list", async (req, res) => {
         Code: 400,
       });
     }
-    const leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" });
+    let leaveList;
+    if (APPNAME) {
+      leaveList = await LeaveDetail.find({
+        EMPNO,
+        TYPE: "MOVEMENT",
+        APPNAME: { $in: APPNAME },
+      }).sort({ ENTRYDT: -1 });
+    } else {
+      leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
+        ENTRYDT: -1,
+      });
+    }
+    //  leaveList = await LeaveDetail.find({ EMPNO, TYPE: "MOVEMENT" }).sort({
+    //   ENTRYDT: -1,
+    // });
+    const formattedLeaveList = [];
+    for (const item of leaveList) {
+      const getdDataFromExpense = await Expense.find({
+        travelId: item.travelId,
+      });
+      const formattedItem = {
+        ...item.toObject(),
+        OS_STATUS:
+          getdDataFromExpense.length > 0
+            ? getdDataFromExpense[0].finalApproval.status
+            : "PENDING",
+      };
+      formattedLeaveList.push(formattedItem);
+    }
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
-      Data: leaveList,
+      Data: formattedLeaveList, // MODIFIED ON 17-12-2025 BY PRADEEP
       Code: 200,
     });
   } catch (error) {
@@ -757,7 +958,7 @@ router.post("/approvals-list", async (req, res) => {
           JOBSPECIFIC: leave.JOBSPECIFIC,
         };
         responseData.push(formattedLeave);
-      })
+      }),
     );
 
     responseData.sort((a, b) => {
@@ -910,9 +1111,748 @@ router.post("/approval-action", async (req, res) => {
   }
 });
 
+router.post("/approval-action-finance", async (req, res) => {
+  try {
+    const { ID, ACTION, EMPNO, ADVANCEAMT, REASON } = req.body;
+    const today = moment().toDate();
+    console.log("====request", req.body);
+
+    const request = await LeaveDetail.findById(ID);
+    if (!request) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Leave request not found",
+        Code: 404,
+      });
+    }
+
+    // Check if the request has already been rejected
+    if (request.STATUS === "REJECTED") {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Request has already been processed",
+        Code: 400,
+      });
+    }
+    const employeeExists = await validateUserExistence(request.EMPNO);
+    if (!employeeExists) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Employee does not exist",
+        Code: 404,
+      });
+    }
+    const isGradeE3OrBelow = employeeExists.GRADE <= "E3";
+    const lvYear = request.LVFRMDT.getFullYear().toString();
+
+    request.STATUS = ACTION;
+    request.REASON = REASON;
+    request.LVSANCBY = EMPNO || null;
+    request.LVSANCDT = today;
+    request.MODBY = EMPNO || "";
+    request.MODDT = today;
+    if (ADVANCEAMT) {
+      request.ADVANCEAMT = ADVANCEAMT;
+    }
+
+    const travelId = await generateTravelId();
+
+    if (ACTION === "APPROVED") {
+      const travelDeskData = {
+        travelId: travelId,
+        employee: employeeExists._id,
+        movement: request._id,
+        claim: null,
+        accommodation: null,
+        brcode: employeeExists.BRCODE,
+        status: "PENDING",
+      };
+      const newTravelDeskEntry = new TravelDesk(travelDeskData);
+      console.log("========newTravelDeskEntry", newTravelDeskEntry);
+      request.travelId = newTravelDeskEntry._id;
+      await newTravelDeskEntry.save();
+    }
+    console.log("========request", request);
+    await request.save();
+
+    return res.status(200).json({
+      Status: "Success",
+      Message: `Leave request ${ACTION} successfully`,
+      Data: request,
+      Code: 200,
+    });
+  } catch (error) {
+    console.error("Error processing movement action:", error);
+    return res.status(500).json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
+  }
+});
+
 async function generateTravelId() {
   const count = await TravelDesk.countDocuments();
   return `T-${count + 1}`;
 }
+
+// generate pdf summary for submitted claim
+router.post("/claim-summary", async (req, res) => {
+  try {
+    const { movement_id, EMPNO, endDate, startDate } = req.body;
+    console.log(req.body, "=====================req.body===================");
+    const result = await TravelDesk.aggregate([
+      {
+        $match: {
+          // EMPNO: EMPNO,
+          _id: new mongoose.Types.ObjectId(movement_id),
+        },
+      },
+      {
+        $lookup: {
+          from: "expenses",
+          localField: "_id",
+          foreignField: "travelId",
+          as: "expenceDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$expenceDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match:
+          endDate && startDate
+            ? {
+                // "expenceDetails.firstApproval.status": "PENDING",  removed on 05-08-2025 to get claim summary for approved claims
+                // "expenceDetails.finalApproval.status": "PENDING",
+                // "expenceDetails.amountSettled.status": "PENDING",
+                "expenceDetails.createdAt": {
+                  $gte: new Date(startDate),
+                  $lte: new Date(endDate),
+                },
+              }
+            : {
+                // "expenceDetails.firstApproval.status": "PENDING",
+                // "expenceDetails.finalApproval.status": "PENDING",
+                // "expenceDetails.amountSettled.status": "PENDING",
+              },
+      },
+      {
+        $lookup: {
+          from: "employeemasters",
+          localField: "employee",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $lookup: {
+          from: "leavedetails",
+          localField: "movement",
+          foreignField: "_id",
+          as: "movement",
+        },
+      },
+      {
+        $lookup: {
+          from: "accommodations",
+          localField: "accommodation",
+          foreignField: "_id",
+          as: "accommodation",
+        },
+      },
+      {
+        $addFields: {
+          employee: {
+            $arrayElemAt: ["$employee", 0],
+          },
+        },
+      },
+      {
+        $unwind: {
+          path: "$movement",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          expenceDetails: {
+            $push: "$expenceDetails",
+          },
+          accommodation: {
+            $first: "$accommodation",
+          },
+          brcode: {
+            $first: "$brcode",
+          },
+          movement: {
+            $first: "$movement",
+          },
+          employee: {
+            $first: "$employee",
+          },
+          travelId: {
+            $first: "$travelId",
+          },
+          accommodationDocuments: {
+            $first: "$accommodationDocuments",
+          },
+          ticketDocuments: {
+            $first: "$ticketDocuments",
+          },
+          travelId: {
+            $first: "$travelId",
+          },
+          status: {
+            $first: "$status",
+          },
+          __v: {
+            $first: "$__v",
+          },
+        },
+      },
+    ]);
+
+    console.log(
+      result,
+      "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&",
+    );
+
+    if (!result.length) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "No movement found",
+        Code: 404,
+      });
+    }
+
+    let movement = result[0].movement;
+
+    // ✅ Generate QR code if missing
+    if (movement && !movement.qrcode && movement.MOVEMENTID) {
+      // Get current timestamp YYYYMM
+      const timestamp = moment().format("YYYYMM");
+
+      // Extract last sequence from MOVEMENTID
+      let lastSeqNo = 0;
+      const lastId = movement.MOVEMENTID.toString();
+      const lastTimestamp = lastId.slice(0, 6);
+      const lastNumber = parseInt(lastId.slice(6), 10);
+
+      if (lastTimestamp === timestamp && !isNaN(lastNumber)) {
+        lastSeqNo = lastNumber;
+      }
+
+      // Increment and format
+      const incrementStr = (lastSeqNo + 1).toString().padStart(4, "0");
+      const uniqueCode = `${timestamp}${incrementStr}`;
+
+      // Generate QR code
+      const qrDataUrl = await qrcode.toDataURL(
+        JSON.stringify({ MOVEMENTID: uniqueCode }),
+      );
+
+      // Save to DB
+      await LeaveDetail.updateOne(
+        { _id: movement._id },
+        { $set: { qrcode: qrDataUrl } },
+      );
+
+      // Attach to object for PDF generation
+      movement.qrcode = qrDataUrl;
+    }
+
+    const summaryData = await generateTravelSummaryPDF(result[0]);
+
+    // generateTravelDetailSummaryPDF(result[0]);
+
+    // axios
+    //   .post(
+    //     "https://smarthr.johnsonliftsltd.com:3001/api/travel-desk/movement/claim-detail-summary",
+    //     { movement_id: movement_id },
+    //     { headers: { "Content-Type": "application/json" } }
+    //   )
+    //   .then((data) => {
+    //     console.log(
+    //       data,
+    //       "=============================== data detail summary ==============="
+    //     );
+    //   });
+
+    res.status(200).json({
+      Status: "Success",
+      Message: "Summary Retrived",
+      Code: 200,
+      Data: summaryData,
+      result: result[0],
+    });
+  } catch (error) {
+    console.error("Error retrieving claim:", error);
+    res.status(500).json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
+  }
+});
+
+// generate pdf summary for submitted claim
+router.post("/claim-detail-summary", async (req, res) => {
+  try {
+    const { movement_id, EMPNO, endDate, startDate } = req.body;
+    console.log(req.body, "=====================req.body===================");
+    const result = await TravelDesk.aggregate([
+      {
+        $match: {
+          // EMPNO: EMPNO,
+          _id: new mongoose.Types.ObjectId(movement_id),
+        },
+      },
+      {
+        $lookup: {
+          from: "expenses",
+          localField: "_id",
+          foreignField: "travelId",
+          as: "expenceDetails",
+        },
+      },
+      {
+        $unwind: {
+          path: "$expenceDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $match:
+          endDate && startDate
+            ? {
+                // "expenceDetails.firstApproval.status": "PENDING",  removed on 05-08-2025 to get claim summary for approved claims
+                // "expenceDetails.finalApproval.status": "PENDING",
+                // "expenceDetails.amountSettled.status": "PENDING",
+                "expenceDetails.createdAt": {
+                  $gte: new Date(startDate),
+                  $lte: new Date(endDate),
+                },
+              }
+            : {
+                // "expenceDetails.firstApproval.status": "PENDING",
+                // "expenceDetails.finalApproval.status": "PENDING",
+                // "expenceDetails.amountSettled.status": "PENDING",
+              },
+      },
+      {
+        $lookup: {
+          from: "employeemasters",
+          localField: "employee",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+      {
+        $lookup: {
+          from: "leavedetails",
+          localField: "movement",
+          foreignField: "_id",
+          as: "movement",
+        },
+      },
+      {
+        $lookup: {
+          from: "accommodations",
+          localField: "accommodation",
+          foreignField: "_id",
+          as: "accommodation",
+        },
+      },
+      {
+        $addFields: {
+          employee: {
+            $arrayElemAt: ["$employee", 0],
+          },
+        },
+      },
+      {
+        $unwind: {
+          path: "$movement",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          expenceDetails: {
+            $push: "$expenceDetails",
+          },
+          accommodation: {
+            $first: "$accommodation",
+          },
+          brcode: {
+            $first: "$brcode",
+          },
+          movement: {
+            $first: "$movement",
+          },
+          employee: {
+            $first: "$employee",
+          },
+          travelId: {
+            $first: "$travelId",
+          },
+          accommodationDocuments: {
+            $first: "$accommodationDocuments",
+          },
+          ticketDocuments: {
+            $first: "$ticketDocuments",
+          },
+          travelId: {
+            $first: "$travelId",
+          },
+          status: {
+            $first: "$status",
+          },
+          __v: {
+            $first: "$__v",
+          },
+        },
+      },
+    ]);
+
+    console.log(
+      result,
+      "================================&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&",
+    );
+
+    const summaryData = await generateTravelDetailSummaryPDF(result[0]);
+
+    res.status(200).json({
+      Status: "Success",
+      Message: "Summary Retrived",
+      Code: 200,
+      Data: summaryData,
+      result: result[0],
+    });
+  } catch (error) {
+    console.error("Error retrieving claim:", error);
+    res.status(500).json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
+  }
+});
+
+// acknowledgment to collect claim data
+
+// router.post("/ack-claim", async (req, res) => {
+//   try {
+//     const { MOVEMENTID, status } = req.body;
+//     const leaveRequest = await LeaveDetail.findOne({ MOVEMENTID: MOVEMENTID });
+//     if (!leaveRequest) {
+//       return res.status(404).json({
+//         Status: "Failed",
+//         Message: "Leave request not found",
+//         Data: {},
+//       });
+//     }
+
+//     const updateMovement = await LeaveDetail.findOneAndUpdate(
+//       { MOVEMENTID: leaveRequest.MOVEMENTID },
+//       { $set: { is_document_collected: status } }
+//     );
+
+//     return res.json({
+//       Status: "Success",
+//       Message: "Documents Received",
+//       Data: leaveRequest,
+//       Code: 200,
+//     });
+//   } catch (error) {
+//     console.error(error.message);
+//     res
+//       .status(500)
+//       .json({ Status: "Failed", Message: error.message, Data: {}, Code: 500 });
+//   }
+// });
+
+router.post("/ack-claim", async (req, res) => {
+  try {
+    const { MOVEMENTID, status, document_submitted_by } = req.body;
+
+    const leaveRequest = await LeaveDetail.findOne({ MOVEMENTID });
+    if (!leaveRequest) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Leave request not found",
+        Data: {},
+        Code: 404,
+      });
+    }
+
+    // 🚨 Already collected → stop here
+    if (leaveRequest.is_document_collected === true) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: `Documents already collected on ${
+          moment(leaveRequest?.document_submitted_at).format(
+            "DD-MM-YYYY HH:mm",
+          ) || ""
+        }`,
+        Data: leaveRequest,
+        Code: 400,
+      });
+    }
+
+    // ✅ Update if not already true
+    const updateMovement = await LeaveDetail.findOneAndUpdate(
+      { MOVEMENTID: leaveRequest.MOVEMENTID },
+      {
+        $set: {
+          is_document_collected: status,
+          document_submitted_at: new Date(),
+          document_submitted_by: document_submitted_by,
+        },
+      },
+      { new: true },
+    );
+
+    return res.json({
+      Status: "Success",
+      Message: "Documents Received",
+      Data: updateMovement,
+      Code: 200,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({
+      Status: "Failed",
+      Message: error.message,
+      Data: {},
+      Code: 500,
+    });
+  }
+});
+
+//status of the movement id
+router.post("/movement-status", async (req, res) => {
+  try {
+    const movementId = req.body.movementId;
+    const leaveRequest = await LeaveDetail.findById(movementId);
+
+    if (!leaveRequest) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Leave request not found",
+        Data: {},
+      });
+    }
+    const query = "GET_TOUREXP_PROCESSDT(:JLS_TEM_JSEQNO) PROCESSDT";
+    const bindParams = { JLS_TEM_JSEQNO: leaveRequest.MOVEMENTID };
+    const result = await executeOracleQuery(query, bindParams);
+    const getdDataFromExpense = await Expense.findOne({
+      travelId: leaveRequest.travelId,
+      "finalApproval.status": "APPROVED",
+    });
+    const status = [
+      { label: "Claim Submitted Date", value: leaveRequest.createdAt },
+      {
+        label: "Approved Date",
+        value: getdDataFromExpense
+          ? getdDataFromExpense.finalApproval.claimApprovedAt
+          : null,
+      },
+      {
+        label: "Doc Ack DT",
+        value: leaveRequest.document_submitted_at || null,
+      },
+      { label: "Settled Date", value: null },
+    ];
+    if (!leaveRequest) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "Data not found",
+        Data: [],
+      });
+    }
+    res.json({
+      Status: "Success",
+      Message: "Data retrieved",
+      Data: status,
+      Code: 200,
+    });
+  } catch (error) {
+    console.error(error.message);
+    res
+      .status(500)
+      .json({ Status: "Failed", Message: error.message, Data: [], Code: 500 });
+  }
+});
+
+router.post("/conveyane-summary", async (req, res) => {
+  try {
+    const { movement_id, EMPNO, endDate, startDate } = req.body;
+
+    console.log(req.body, "=====================req.body===================");
+
+    const result = await TravelDesk.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(movement_id),
+        },
+      },
+
+      {
+        $lookup: {
+          from: "expenses",
+          localField: "_id",
+          foreignField: "travelId",
+          as: "expenceDetails",
+        },
+      },
+
+      {
+        $unwind: {
+          path: "$expenceDetails",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $match:
+          endDate && startDate
+            ? {
+                "expenceDetails.createdAt": {
+                  $gte: new Date(startDate),
+                  $lte: new Date(endDate),
+                },
+              }
+            : {},
+      },
+
+      {
+        $lookup: {
+          from: "employeemasters",
+          localField: "employee",
+          foreignField: "_id",
+          as: "employee",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "leavedetails",
+          localField: "movement",
+          foreignField: "_id",
+          as: "movement",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "accommodations",
+          localField: "accommodation",
+          foreignField: "_id",
+          as: "accommodation",
+        },
+      },
+
+      {
+        $addFields: {
+          employee: {
+            $arrayElemAt: ["$employee", 0],
+          },
+        },
+      },
+
+      {
+        $unwind: {
+          path: "$movement",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $group: {
+          _id: "$_id",
+
+          expenceDetails: {
+            $push: "$expenceDetails",
+          },
+
+          accommodation: {
+            $first: "$accommodation",
+          },
+
+          brcode: {
+            $first: "$brcode",
+          },
+
+          movement: {
+            $first: "$movement",
+          },
+
+          employee: {
+            $first: "$employee",
+          },
+
+          travelId: {
+            $first: "$travelId",
+          },
+
+          accommodationDocuments: {
+            $first: "$accommodationDocuments",
+          },
+
+          ticketDocuments: {
+            $first: "$ticketDocuments",
+          },
+
+          status: {
+            $first: "$status",
+          },
+
+          __v: {
+            $first: "$__v",
+          },
+        },
+      },
+    ]);
+
+    console.log(result, "=====================RESULT=====================");
+
+    if (!result.length) {
+      return res.status(404).json({
+        Status: "Failed",
+        Message: "No movement found",
+        Code: 404,
+      });
+    }
+
+    // =========================
+    // GENERATE PDF
+    // =========================
+    const summaryData = await generateconveyanceSummaryPDF(result[0]);
+
+    return res.status(200).json({
+      Status: "Success",
+      Message: "Conveyance Summary Retrieved",
+      Code: 200,
+      Data: summaryData,
+      result: result[0],
+    });
+  } catch (error) {
+    console.error("Error retrieving conveyance summary:", error);
+
+    return res.status(500).json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Code: 500,
+      error: error.message,
+    });
+  }
+});
 
 module.exports = router;

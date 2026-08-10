@@ -518,7 +518,13 @@ router.post("/add-expenses", async (req, res) => {
       compositeHasValue,
       isFirstDate,
       isLastDate,
+      tda,
     } = req.body;
+
+    console.log(
+      req.body.expenseDeviationData,
+      "======================== req.body.expenseDeviationData ===========================",
+    );
 
     // Validate required fields
     if (!date || !travelId) {
@@ -528,9 +534,33 @@ router.post("/add-expenses", async (req, res) => {
         Code: 400,
       });
     }
+    console.log(
+      "========================date===========================",
+      date,
+    );
+    const convertDate = moment(date, "DD-MM-YYYY");
+    console.log(
+      "========================convertDate===========================",
+      convertDate,
+    );
+    const isAfterToday = convertDate.isAfter(moment());
+    console.log(
+      "========================isAfterToday===========================",
+      isAfterToday,
+    );
+    if (isAfterToday) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Cant Apply Claim For Future Date",
+        Code: 400,
+      });
+    }
 
-    if (firstApproval.status === "" && finalApproval.status === "") {
-      (firstApproval.status = "PENDING"), (finalApproval.status = "PENDING");
+    if (
+      (firstApproval.status === "" && finalApproval.status === "") ||
+      firstApproval.status === null
+    ) {
+      ((firstApproval.status = "PENDING"), (finalApproval.status = "PENDING"));
     }
 
     const travelDesk = await TravelDesk.findById(travelId).populate({
@@ -550,6 +580,16 @@ router.post("/add-expenses", async (req, res) => {
       return res
         .status(404)
         .json({ Status: "Failed", Message: "User not found", Code: 404 });
+    }
+
+    if (userExists.STATUS === "I") {
+      // added by sp on 20-04-2026
+      return res.status(403).json({
+        Status: "Failed",
+        Message: "User with provided EMPNO is not active.Please Contact Admin",
+        Data: {},
+        Code: 403,
+      });
     }
 
     const grade = userExists.GRADE;
@@ -581,6 +621,7 @@ router.post("/add-expenses", async (req, res) => {
         toLoc: "",
         description: "",
         city: "",
+        // gst: false,
       };
     });
 
@@ -589,7 +630,7 @@ router.post("/add-expenses", async (req, res) => {
 
     for (const [type, expenseData] of Object.entries(expenseDeviationData)) {
       if (expenseData) {
-        let { amount, fromLoc, toLoc, description, city, amountDetails } =
+        let { amount, fromLoc, toLoc, description, city, amountDetails, gst } =
           expenseData;
         const receipt = imageData[`${type.toLowerCase()}Receipt`] || [];
         let isValid = false;
@@ -600,7 +641,7 @@ router.post("/add-expenses", async (req, res) => {
         let checkBoardingBill = false;
 
         if (!city && +expenseDeviationData[type].amount > 0) {
-          res.status(400).json({
+          return res.status(400).json({
             Status: "Failed",
             Message: `Please enter city`,
             Code: 400,
@@ -617,7 +658,7 @@ router.post("/add-expenses", async (req, res) => {
                   city,
                   grade,
                   amtDetails.amount,
-                  totalDuration
+                  totalDuration,
                 );
                 if (receipt.length < countTra || receipt.length == 0) {
                   return res.status(400).json({
@@ -642,18 +683,18 @@ router.post("/add-expenses", async (req, res) => {
               const BOARDINGAmount = maxAmountOfBoading(city, grade);
               console.log(
                 BOARDINGAmount,
-                "============================= BOARDINGAmount ==============================="
+                "============================= BOARDINGAmount ===============================",
               );
               const boardMax = BOARDINGAmount;
               const bordMin = BOARDINGAmount * 0.5;
 
               console.log(
                 bordMin,
-                "============================ bordMin ================================="
+                "============================ bordMin =================================",
               );
               console.log(
                 amount,
-                "========================================== amount =================================="
+                "========================================== amount ==================================",
               );
               if (amount > bordMin && receipt.length == 0) {
                 return res.status(400).json({
@@ -698,12 +739,12 @@ router.post("/add-expenses", async (req, res) => {
                 grade,
                 amount,
                 receipt,
-                totalDuration
+                totalDuration,
               );
 
               console.log(
                 "=============valid===================================",
-                isValid
+                isValid,
               );
             }
             isValid = true;
@@ -729,7 +770,7 @@ router.post("/add-expenses", async (req, res) => {
                 const carAmount = maxAmountComposite(city, grade);
                 console.log(
                   carAmount,
-                  "=============================== max carAmount ============================="
+                  "=============================== max carAmount =============================",
                 );
                 if (carAmount < 0) {
                   return res.status(400).json({
@@ -746,29 +787,68 @@ router.post("/add-expenses", async (req, res) => {
                   });
                 }
 
-                compAmount = (20 / 100) * carAmount;
-                if (amount > compAmount) {
-                  res.status(400).json({
-                    Status: "Failed",
-                    Message: `For car travel, you are allowed to claim only 20% . Claim amount  ${compAmount}`,
-                    Code: 400,
-                  });
+                // allow 20% + 5% of the amount for car travel
+                const isSameDate = moment(departureDate).isSame(
+                  returnDate,
+                  "day",
+                );
+
+                console.log(
+                  isSameDate,
+                  "=================== isSameDate ====================",
+                );
+                if (isSameDate) {
+                  let amountCal = (20 / 100) * carAmount;
+                  console.log(
+                    amountCal,
+                    "=================== amountCal ====================",
+                  );
+                  let gstAmount = (5 / 100) * amountCal;
+                  console.log(
+                    gstAmount,
+                    "=================== gstAmount ====================",
+                  );
+                  compAmount = Number(amountCal) + Number(gstAmount);
                 } else {
-                  if (receipt.length > 0) {
-                    isValid = validateCompositeExpense(
-                      city,
-                      grade,
-                      amount,
-                      receipt,
-                      totalDuration
-                    );
-                    isValid = true;
+                  compAmount = (50 / 100) * carAmount; // 50% of the amount for car travel
+                }
+                console.log(
+                  compAmount,
+                  "=================== compAmount ====================",
+                );
+                if (amount > compAmount) {
+                  if (isSameDate) {
+                    res.status(400).json({
+                      Status: "Failed",
+                      Message: `For car travel, you are allowed to claim only 20% . Claim amount  ${compAmount}`,
+                      Code: 400,
+                    });
                   } else {
                     res.status(400).json({
                       Status: "Failed",
-                      Message: `Upload Food Bill - Travel By Car `,
+                      Message: `For car travel, you are allowed to claim only 50% . Claim amount  ${compAmount}`,
                       Code: 400,
                     });
+                  }
+                } else {
+                  // bill only needed for singale day car
+                  if (isSameDate) {
+                    if (receipt.length > 0) {
+                      isValid = validateCompositeExpense(
+                        city,
+                        grade,
+                        amount,
+                        receipt,
+                        totalDuration,
+                      );
+                      isValid = true;
+                    } else {
+                      res.status(400).json({
+                        Status: "Failed",
+                        Message: `Upload Food Bill - Travel By Car `,
+                        Code: 400,
+                      });
+                    }
                   }
                 }
                 break;
@@ -787,7 +867,7 @@ router.post("/add-expenses", async (req, res) => {
               }
 
               if (amount > compAmount) {
-                res.status(400).json({
+                return res.status(400).json({
                   Status: "Failed",
                   Message: `Only 50% of the amount 0f bording and loding will claim according to the policy`,
                   Code: 400,
@@ -797,19 +877,19 @@ router.post("/add-expenses", async (req, res) => {
               if (isLastDate) {
                 console.log(
                   compAmount,
-                  "========================== compAmount ================================"
+                  "========================== compAmount ================================",
                 );
                 const lastDatePercentageAmt = compAmount * 0.3;
                 console.log(
                   lastDatePercentageAmt,
-                  "======================= lastDatePercentageAmt ================================="
+                  "======================= lastDatePercentageAmt =================================",
                 );
                 console.log(
                   amount,
-                  "======================= amount ================================="
+                  "======================= amount =================================",
                 );
                 if (amount > lastDatePercentageAmt) {
-                  res.status(400).json({
+                  return res.status(400).json({
                     Status: "Failed",
                     Message: `Only 30% of the amount 0f bording and loding will claim according to the policy for last day`,
                     Code: 400,
@@ -821,7 +901,7 @@ router.post("/add-expenses", async (req, res) => {
                 grade,
                 amount,
                 receipt,
-                totalDuration
+                totalDuration,
               );
 
               // added for composite
@@ -840,7 +920,7 @@ router.post("/add-expenses", async (req, res) => {
               console.log(
                 "____________amountDetails and amountDetails.length________________________",
                 amountDetails,
-                amountDetails.length
+                amountDetails.length,
               );
               let count = 0;
               for (const amtDetails of amountDetails) {
@@ -849,7 +929,7 @@ router.post("/add-expenses", async (req, res) => {
                   grade,
                   amtDetails.amount,
                   receipt,
-                  totalDuration
+                  totalDuration,
                 );
                 console.log("CONVEYANCE amount", max);
                 isValid = bool;
@@ -883,6 +963,11 @@ router.post("/add-expenses", async (req, res) => {
           });
         }
 
+        console.log(
+          type,
+          "============================ type ===========================",
+        );
+
         if (type === "CONVEYANCE" || type === "TRAVEL") {
           if (amountDetails && amountDetails.length > 0) {
             for (const amtDetails of amountDetails) {
@@ -908,6 +993,15 @@ router.post("/add-expenses", async (req, res) => {
             validExpenses[type].toLoc = toLoc;
             validExpenses[type].description = description;
             validExpenses[type].city = city;
+            validExpenses[type].gst = gst; // added gst on 02-06-2025
+          } else {
+            validExpenses[type].amount = amount;
+            validExpenses[type].receipt = receipt;
+            validExpenses[type].fromLoc = fromLoc;
+            validExpenses[type].toLoc = toLoc;
+            validExpenses[type].description = description;
+            validExpenses[type].city = city;
+            validExpenses[type].gst = gst;
           }
         }
 
@@ -1006,8 +1100,9 @@ router.post("/add-expenses", async (req, res) => {
               //   : [],
               firstApproval,
               finalApproval,
+              tda: tda,
             },
-          }
+          },
         );
         res.json({
           Status: "Success",
@@ -1018,13 +1113,36 @@ router.post("/add-expenses", async (req, res) => {
         // Create a new expense entry
         console.log(
           firstApproval,
-          "===================== firstApproval ==================="
+          "===================== firstApproval ===================",
         );
         console.log(
           finalApproval,
-          "===================== finalApproval ==================="
+          "===================== finalApproval ===================",
         );
 
+        // added for TDA calculation based on travel time
+        // let tda = 0;
+        /*
+        if (
+          travelDesk.movement.TRAVELTIME > 6 &&
+          travelDesk.movement.TRAVELTIME <= 15 &&
+          (isFirstDate || isLastDate)
+        ) {
+          tda = 150;
+        } else if (
+          travelDesk.movement.TRAVELTIME > 15 &&
+          travelDesk.movement.TRAVELTIME <= 24 &&
+          (isFirstDate || isLastDate)
+        ) {
+          tda = 250;
+        } else if (
+          travelDesk.movement.TRAVELTIME > 24 &&
+          (isFirstDate || isLastDate)
+        ) {
+          tda = 400;
+        }
+          */
+        // console.log(tda, "===================== tda ===================");
         const newExpense = new Expense({
           travelId,
           totalAmount,
@@ -1032,6 +1150,7 @@ router.post("/add-expenses", async (req, res) => {
           expenseDeviationTDA: validTDAExpenses,
           firstApproval,
           finalApproval,
+          tda: tda,
         });
         await newExpense.save();
         res.json({
@@ -1129,7 +1248,7 @@ router.post("/update-expenses", async (req, res) => {
                 city,
                 grade,
                 amount,
-                totalDuration
+                totalDuration,
               );
               break;
             case "BOARDING":
@@ -1138,7 +1257,7 @@ router.post("/update-expenses", async (req, res) => {
                 grade,
                 amount,
                 receipt,
-                totalDuration
+                totalDuration,
               );
               break;
             case "LODGING":
@@ -1147,7 +1266,7 @@ router.post("/update-expenses", async (req, res) => {
                 grade,
                 amount,
                 receipt,
-                totalDuration
+                totalDuration,
               );
               break;
             case "COMPOSITE":
@@ -1156,7 +1275,7 @@ router.post("/update-expenses", async (req, res) => {
                 grade,
                 amount,
                 receipt,
-                totalDuration
+                totalDuration,
               );
               break;
             case "CONVEYANCE":
@@ -1165,7 +1284,7 @@ router.post("/update-expenses", async (req, res) => {
                 grade,
                 amount,
                 receipt,
-                totalDuration
+                totalDuration,
               );
               isValid = bool;
               break;
@@ -1209,7 +1328,7 @@ router.post("/update-expenses", async (req, res) => {
         firstApproval: { approver: firstApproval },
         finalApproval: { approver: finalApproval },
       },
-      { new: true } // Return the updated document
+      { new: true }, // Return the updated document
     );
 
     if (!updatedExpense) {
@@ -1392,7 +1511,8 @@ router.post("/expense-listby-travel", async (req, res) => {
         travelId: 1,
         firstApproval: 1,
         finalApproval: 1,
-      }
+        tda: 1,
+      },
     );
 
     if (!expenseData || expenseData.length === 0) {
@@ -1413,7 +1533,7 @@ router.post("/expense-listby-travel", async (req, res) => {
     // Check if any expense includes BOARDING or LODGING types
     const BLFLAG = expenseData.some((expense) => {
       return Object.keys(expense.expenses).some((key) =>
-        ["BOARDING", "LODGING"].includes(key)
+        ["BOARDING", "LODGING"].includes(key),
       );
     });
 
@@ -1440,13 +1560,14 @@ router.post("/expense-listby-travel", async (req, res) => {
     const expenseTdaData = [];
     let totalAmountOfexp = 0;
     for (const element of expenseData) {
-      totalAmountOfexp = totalAmountOfexp + element.totalAmount;
+      totalAmountOfexp = totalAmountOfexp + element.totalAmount + element.tda;
       //Combing the expenseData into into single array
       for (const exp of element.expenses) {
         console.log(
           element.expenses,
-          "================================= element.expenses"
+          "================================= element.expenses",
         );
+        exp.tda = element.tda;
         expensesData.push(exp);
       }
       //Combing the expenseDeviationTDA into into single array
@@ -1676,24 +1797,24 @@ router.post("/accommodation-data", async (req, res) => {
 router.post("/update-expense-amount", async (req, res) => {
   try {
     const data = await Expense.findOneAndUpdate(
-      { "expenses._id": new mongoose.Types.ObjectId(req.body._id) },
+      { "expenses._id": new mongoose.Types.ObjectId(req.body.expenses._id) },
       {
         $set: {
           expenses: req.body.expenses,
         },
-      }
+      },
     );
     const data1 = await Expense.findOneAndUpdate(
       {
         "expenseDeviationTDA._id": new mongoose.Types.ObjectId(
-          req.body.expenseTDA._id
+          req.body.expenseTDA._id,
         ),
       },
       {
         $set: {
           expenseDeviationTDA: req.body.expenseTDA,
         },
-      }
+      },
     );
     return res.status(200).json({
       Status: "Success",
