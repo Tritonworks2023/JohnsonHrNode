@@ -471,7 +471,7 @@ router.post("/apply-movement", async (req, res) => {
     if (userExists.BRCODE !== BRCODE) {
       return res.status(400).json({
         Status: "Failed",
-        Message: "Invalid barcode. Please log in again.",
+        Message: "You Recently Transferred from another branch. Please log in again.",
         Data: {},
         Code: 400,
       });
