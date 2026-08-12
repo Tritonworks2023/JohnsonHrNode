@@ -522,8 +522,8 @@ router.post("/add-expenses", async (req, res) => {
     } = req.body;
 
     console.log(
-      req.body.expenseDeviationData,
-      "======================== req.body.expenseDeviationData ===========================",
+      req.body.imageData,
+      "=========================imageData===========================",
     );
 
     // Validate required fields
@@ -934,6 +934,15 @@ router.post("/add-expenses", async (req, res) => {
                 console.log("CONVEYANCE amount", max);
                 isValid = bool;
                 if (max) {
+                  count++;
+                  console.log(
+                    "__________________________receipt count__________________________",
+                    receipt.length,
+                  );
+                  console.log(
+                    count,
+                    "__________________________count__________________________",
+                  );
                   if (receipt.length < count || receipt.length == 0) {
                     return res.status(400).json({
                       Status: "Failed",
@@ -942,7 +951,7 @@ router.post("/add-expenses", async (req, res) => {
                     });
                   }
                 }
-                count++;
+                //count++; commented and moved inside if condition to solve e4 grade issue
                 if (!isValid) {
                   break;
                 }
