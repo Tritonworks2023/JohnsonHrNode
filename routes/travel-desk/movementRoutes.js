@@ -471,14 +471,36 @@ router.post("/apply-movement", async (req, res) => {
     if (userExists.BRCODE !== BRCODE) {
       return res.status(400).json({
         Status: "Failed",
-        Message: "You Recently Transferred from another branch. Please log in again.",
+        Message:
+          "You Recently Transferred from another branch. Please log in again.",
         Data: {},
         Code: 400,
       });
     }
 
+    // IF MOVEMENT DATE IS >= 1 , DONT ALLOW TO APPLY MOVEMENT FOR E3 AND ABOVE GRADE EMPLOYEES FOR TRAVEL MODE "CAR"  -BY SP ON 2026-09-17
+
     const parsedLVFRMDT = moment(LVFRMDT, "DD-MM-YYYY").toDate();
     const parsedLVTODT = moment(LVTODT, "DD-MM-YYYY").toDate();
+
+    const dayCount =
+      moment(parsedLVTODT).diff(moment(parsedLVFRMDT), "days") + 1;
+
+    if (
+      dayCount > 1 &&
+      (userExists.GRADE === "E3" ||
+        userExists.GRADE === "E4" ||
+        userExists.GRADE === "E5" ||
+        userExists.GRADE === "E6" ||
+        userExists.GRADE === "E7") &&
+      JOURNEYMODE === "CAR"
+    ) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Please Refer CAR Policy",
+        Code: 400,
+      });
+    }
 
     if (isNaN(parsedLVFRMDT.getTime()) || isNaN(parsedLVTODT.getTime())) {
       return res.status(400).json({
