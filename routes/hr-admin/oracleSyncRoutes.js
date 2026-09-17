@@ -80,6 +80,7 @@ router.get('/sync-employees', async (req, res) => {
                 }
               } else {
                 if (!existingEmployee) {
+                    const branchDetail = await BranchMaster.findOne({BRCODE:record.BRCODE})
                     const newEmployee = {
                         ECODE,
                         EMPNO: ECODE,
@@ -114,7 +115,9 @@ router.get('/sync-employees', async (req, res) => {
                         APPMGR: record.REPMGR,
                         ORIGINALPHOTO: "",
                         LOGINPHOTO: "",
-                        CREATEDDATE: Date.now() 
+                        CREATEDDATE: Date.now(),
+                        BRSTARTTIME:branchDetail.BRSTARTTIME,
+                        BRENDTIME:branchDetail.BRENDTIME
                     };
                     employeesToCreate.push(newEmployee);
                 }
