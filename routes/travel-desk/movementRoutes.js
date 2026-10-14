@@ -594,7 +594,14 @@ router.post("/apply-movement", async (req, res) => {
           //travelTimeInHours < 14 &&
           // JOURNEYMODE --- "Air"
           isValidJourney = true; // isValidJourney = false;     -- set as valid journey for E4 grade on mode AIR by sp on 30-01-2026
-      } else if (employeeGrade === "E3" && !DEVIATION) {
+      } else if (
+        employeeGrade === "E3" ||
+        employeeGrade === "E4" ||
+        employeeGrade === "E5" ||
+        employeeGrade === "E6" ||
+        (employeeGrade === "E7" && !DEVIATION)
+      ) {
+        // added E4,E5,E6,E7  and set isValidjourney = true to allow air mode as discussed with suthir sir on 14-10-2026 by sp
         if (
           // travelTimeInHours < 16 &&
           gradeEligibility.mode === "Air" &&
@@ -602,7 +609,8 @@ router.post("/apply-movement", async (req, res) => {
           JOURNEYMODE !== "TRAIN" &&
           JOURNEYMODE !== "CAR"
         )
-          isValidJourney = false;
+          //isValidJourney = false;
+          isValidJourney = true;
       } else if (
         employeeGrade === "TE1" ||
         employeeGrade === "TE2" ||
