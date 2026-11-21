@@ -39,24 +39,30 @@ function normalizePort(val) {
 var port = normalizePort(process.env.PORT || "3001");
 app.set("port", port);
 
-const sslCertificate = fs.readFileSync('/ssl2024/49b8b92fbdffbf67.crt');
-const privateKey = fs.readFileSync('/ssl2024/johnsonliftsltd.com.key');
-const certificateChain = fs.readFileSync('/ssl2024/gd_bundle-g2-g1.crt');
+const sslCertificate = fs.readFileSync(
+  "/home/smartfinance/newssl2026/f0f112f7c09b35d8.crt",
+);
+const privateKey = fs.readFileSync(
+  "/home/smartfinance/newssl2026/johnsonliftsltd.key",
+);
+const certificateChain = fs.readFileSync(
+  "/home/smartfinance/newssl2026/gd_bundle_dv-r1-g2.crt.pem",
+);
 
-console.log("=============sslKey",sslCertificate);
-console.log("=============privateKey",privateKey);
-console.log("=============certificateChain",certificateChain);
+console.log("=============sslKey", sslCertificate);
+console.log("=============privateKey", privateKey);
+console.log("=============certificateChain", certificateChain);
 const options = {
   cert: sslCertificate,
   key: privateKey,
-  ca: certificateChain
+  ca: certificateChain,
 };
 
 // Create HTTP server.
 //var server = http.createServer(app);
 
 // Create HTTPS server.
- var server = https.createServer(options,app);
+var server = https.createServer(options, app);
 
 //var server = http.createServer(app);
 
@@ -64,7 +70,7 @@ const options = {
 connectToMongoDB()
   .then(() => {
     //Initialize main Oracle connection pool
-   
+
     server.listen(port);
     server.on("error", onError);
     server.on("listening", onListening);
@@ -73,7 +79,6 @@ connectToMongoDB()
     console.error("Error connecting to MongoDB:", err);
     process.exit(1);
   });
-
 
 /**
  * Event listener for HTTP server "error" event.

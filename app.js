@@ -7,6 +7,7 @@ const bodyParser = require("body-parser");
 const fileUpload = require("express-fileupload");
 const compression = require("compression");
 const responseMiddleware = require("./middlewares/response.middleware");
+const cors = require("cors");
 
 console.log("====process.env", process.env.NODE_ENV);
 
@@ -79,6 +80,15 @@ const movementAdminRoutes = require("./routes/travel-desk/movementAdminRoutes");
 const travelAdminRoutes = require("./routes/travel-desk/travelAdminRoutes");
 
 const app = express();
+
+app.use(cors({
+  origin: "https://smarthr.johnsonliftsltd.com",  // Angular app domain
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Preflight handling
+app.options("*", cors());
 
 app.use(fileUpload());
 app.use(responseMiddleware());

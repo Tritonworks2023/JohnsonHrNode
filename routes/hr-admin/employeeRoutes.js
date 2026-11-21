@@ -23,6 +23,8 @@ const Permission = require("../../models/permissionModel");
 const CompensatoryOff = require("../../models/compensatoryOffModel");
 const BalanceLeave = require("../../models/balanceLeaveModel");
 const Holiday = require("../../models/holidayModel");
+const operationUsersModel = require("../../models/user_managementModel");
+const serviceUsersModel = require("../../models/service_userdetailsModel");
 
 const formatDateMiddleware = (req, res, next) => {
   const originalJson = res.json;
@@ -620,15 +622,91 @@ router.post("/getAllEmployees", async (req, res) => {
       filter.STATUS = req.body.STATUS;
     }
 
-    console.log(
-      filter,
-      "============================ filter ======================="
-    );
     const employees = await EmployeeMaster.find(filter);
+    const finalData = [];
+    for (const element of employees) {
+      const oprData = await operationUsersModel.findOne({
+        agent_code: element.EMPNO,
+      });
+      const serData = await serviceUsersModel.findOne({
+        user_id: element.EMPNO,
+      });
+      if (oprData !== null) {
+        element["_doc"].DPT_TYPE = oprData.user_designation;
+        finalData.push(element);
+      } else if (serData !== null) {
+        element["_doc"].DPT_TYPE = serData.emp_type;
+        finalData.push(element);
+      } else {
+        element["_doc"].DPT_TYPE = "";
+        finalData.push(element);
+      }
+    }
     res.json({
       Status: "Success",
       Message: "Employees retrieved successfully",
-      Data: employees,
+      Data: finalData,
+      Code: 200,
+    });
+  } catch (error) {
+    console.error("Error retrieving employees:", error);
+    res.json({
+      Status: "Failed",
+      Message: "Internal Server Error",
+      Data: {},
+      Code: 200,
+    });
+  }
+});
+
+// update service type
+
+router.post("/updateservtypes", async (req, res) => {
+  try {
+    let filter = { BRCODE: { $nin: ["MH03", "TN05", "TN10", "TN25"] } };
+    if (req.body.BRCODE && Array.isArray(req.body.BRCODE)) {
+      filter.BRCODE = { $in: req.body.BRCODE };
+    }
+    if (req.body.STATUS) {
+      filter.STATUS = req.body.STATUS;
+    }
+
+    const employees = await EmployeeMaster.find(filter);
+
+    for (const element of employees) {
+      const oprData = await operationUsersModel.findOne({
+        agent_code: element.EMPNO,
+      });
+      const serData = await serviceUsersModel.findOne({
+        user_id: element.EMPNO,
+      });
+      if (oprData !== null) {
+        await EmployeeMaster.findOneAndUpdate(
+          {
+            EMPNO: oprData.agent_code,
+          },
+          { $set: { SERVICETYPE: oprData.user_designation } }
+        );
+      } else if (serData !== null) {
+        await EmployeeMaster.findOneAndUpdate(
+          {
+            EMPNO: serData.user_id,
+          },
+          { $set: { SERVICETYPE: serData.emp_type } }
+        );
+      } else {
+        await EmployeeMaster.findOneAndUpdate(
+          {
+            EMPNO: element.EMPNO,
+          },
+          { $set: { SERVICETYPE: "" } }
+        );
+      }
+    }
+    res.json({
+      Status: "Success",
+      Message: "Employees Updated successfully",
+      Data: [],
       Code: 200,
     });
   } catch (error) {
@@ -726,7 +804,7 @@ router.post("/getAllEmployeesProjection", async (req, res) => {
 router.post("/leave-list", async (req, res) => {
   try {
     let filter = {
-      LVCODE: { $nin: ["OD", "OS"] },
+      LVCODE: { $nin: ["DO", "OS"] },
     };
     if (req.body.BRCODE && Array.isArray(req.body.BRCODE)) {
       filter.BRCODE = { $in: req.body.BRCODE };
@@ -752,7 +830,7 @@ router.post("/leave-list", async (req, res) => {
 router.post("/movement-list", async (req, res) => {
   try {
     let filter = {
-      LVCODE: { $in: ["OD", "OS"] },
+      LVCODE: { $in: ["DO", "OS"] },
     };
     if (req.body.BRCODE && Array.isArray(req.body.BRCODE)) {
       filter.BRCODE = { $in: req.body.BRCODE };
@@ -1728,6 +1806,18 @@ router.post("/update-attendance-data", async (req, res) => {
         Status: "Error",
         Message:
           "Invalid date range. From date and to date must be within the current month.",
+        Code: 400,
+      });
+    }
+
+    // cant allow to apply more than 2 concecutive days
+
+    const daysCount = moment(toDate).diff(moment(fromDate), "days") + 1;
+
+    if (daysCount > 2) {
+      return res.status(400).json({
+        Status: "Error",
+        Message: "Can't Apply Leave More Than 2 Consecutive days",
         Code: 400,
       });
     }

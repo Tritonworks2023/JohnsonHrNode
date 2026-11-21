@@ -28,9 +28,10 @@ const CompensatoryOff = require("../../models/compensatoryOffModel");
 const UserManagement = require("../../models/user_managementModel");
 const ServiceUserDetails = require("../../models/service_userdetailsModel");
 
-var admin_accessModel = require("../../models/admin_accessModel");
+const admin_accessModel = require("../../models/admin_accessModel");
 
 const { createNotification } = require("./shareRoutes");
+const PushNotification = require("../../models/pushNotificationModel");
 
 const gradeOrder = [
   "E8",
@@ -60,7 +61,7 @@ const leaveCodes = [
   { LVCODE: "EL", LVDESC: "Earned Leave" },
   { LVCODE: "SL", LVDESC: "Sick Leave" },
   { LVCODE: "CO", LVDESC: "Comp-off" },
-  { LVCODE: "OD", LVDESC: "On Duty" },
+  { LVCODE: "DO", LVDESC: "On Duty" },
   { LVCODE: "OS", LVDESC: "Out Station" },
 ];
 
@@ -151,8 +152,37 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   //    return d;
 }
 
+function isPointInPolygon(point, polygon, buffer = 0) {
+  const x = point.lat,
+    y = point.lng;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lat,
+      yi = polygon[i].lng;
+    const xj = polygon[j].lat,
+      yj = polygon[j].lng;
+
+    const intersect =
+      yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+
+  if (inside) return true;
+
+  // Check buffer distance
+  for (let i = 0; i < polygon.length - 1; i++) {
+    const start = polygon[i];
+    const end = polygon[i + 1];
+    const d = distanceToSegment(point, start, end);
+    if (d <= buffer) return true;
+  }
+
+  return false;
+}
+
 function isWithinRadius(lat, lng, brlat, brlng, radius = 150) {
-  const earthRadius = 6371000;
+  const earthRadius = 6371000; // meters
   const latRad = (lat * Math.PI) / 180;
   const lngRad = (lng * Math.PI) / 180;
   const brlatRad = (brlat * Math.PI) / 180;
@@ -170,48 +200,8 @@ function isWithinRadius(lat, lng, brlat, brlng, radius = 150) {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = earthRadius * c;
+
   return distance <= radius;
-}
-
-function haversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // radius of Earth in meters
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // distance in meters
-}
-
-function isPointInPolygon(point, polygon, buffer = 0) {
-  const x = point.lat,
-    y = point.lng;
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].lat,
-      yi = polygon[i].lng;
-    const xj = polygon[j].lat,
-      yj = polygon[j].lng;
-    const intersect =
-      yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
-  }
-  if (inside) return true;
-
-  for (let i = 0; i < polygon.length - 1; i++) {
-    const start = polygon[i];
-    const end = polygon[i + 1];
-    const d = distanceToSegment(point, start, end);
-    console.log("======d", d);
-    console.log("======buffer", buffer);
-    if (d <= buffer) return true;
-  }
-
-  return false;
 }
 
 function distanceToSegment(point, start, end) {
@@ -248,12 +238,55 @@ function distanceToSegment(point, start, end) {
   return haversineDistance(x0, y0, xx, yy);
 }
 
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // distance in meters
+}
+
+// get last working date
+
+function getLastWorkingDate() {
+  let lastDate = moment().endOf("month"); // Get last date of the month
+
+  // If the last date is Saturday (6) or Sunday (0), move it back to Friday (5)
+  if (lastDate.day() === 0) {
+    lastDate.subtract(1, "days"); // Move to Friday
+  }
+
+  return lastDate.format("YYYY-MM-DD");
+}
+
 // ******************************************************************************************************************************************************************************
 // USER LOGIN MOBILE
 // ******************************************************************************************************************************************************************************
 router.post("/login", async (req, res) => {
-  const { EMPNO, PASSWORD } = req.body;
-  console.log("===========req.body", req.body);
+  const { EMPNO, PASSWORD, HRAPPVERSION } = req.body;
+  console.log(
+    "===========req.body===================================",
+    req.body,
+  );
+
+  // check branch admin to show qr
+
+  const subAdminData = await admin_accessModel.findOne({
+    user_name: EMPNO,
+  });
+  console.log(subAdminData, "==========subadmin");
+  let scanQr = false;
+  if (subAdminData) {
+    scanQr = true;
+  } else {
+    scanQr = false;
+  }
 
   // return res.status(400).json({
   //   Status: "Failed",
@@ -268,7 +301,7 @@ router.post("/login", async (req, res) => {
     res.status(200).json({
       Status: "Success",
       Message: "User authenticated successfully",
-      Data: user,
+      Data: { scanQr: scanQr, ...user["_doc"] },
       Code: 200,
     });
   }
@@ -291,6 +324,7 @@ router.post("/login", async (req, res) => {
         Code: 404,
       });
     }
+
     if (user.PASSWORD !== PASSWORD) {
       return res.status(400).json({
         Status: "Failed",
@@ -299,14 +333,14 @@ router.post("/login", async (req, res) => {
         Code: 400,
       });
     }
-    if (user.BLOCKSTATUS) {
-      return res.status(400).json({
-        Status: "Failed",
-        Message: "Your account blocked contact branch HR",
-        Data: {},
-        Code: 400,
-      });
-    }
+    // if (user.BLOCKSTATUS) {
+    //   return res.status(400).json({
+    //     Status: "Failed",
+    //     Message: "Your account blocked contact branch HR",
+    //     Data: {},
+    //     Code: 400,
+    //   });
+    // }
     if (user.STATUS == "I") {
       return res.status(400).json({
         Status: "Failed",
@@ -315,23 +349,24 @@ router.post("/login", async (req, res) => {
         Code: 400,
       });
     }
-    if (user.LOCCODE == "NOLOC") {
-      return res.status(400).json({
-        Status: "Failed",
-        Message:
-          "Your location Should be Field/Non Field ,Kindly Contact Branch HR",
-        Data: {},
-        Code: 400,
-      });
-    }
+    // if (user.LOCCODE == "NOLOC") {
+    //   return res.status(400).json({
+    //     Status: "Failed",
+    //     Message:
+    //       "Your location Should be Field/Non Field ,Kindly Contact Branch HR",
+    //     Data: {},
+    //     Code: 400,
+    //   });
+    // }
     console.log("==========user.DEVICEID", user.DEVICEID);
     if (user.DEVICEID == "" || user.DEVICEID == undefined) {
       user.DEVICEID = req.body.device_id;
+
       await user.save();
       res.status(200).json({
         Status: "Success",
         Message: "User authenticated successfully",
-        Data: user,
+        Data: { scanQr: scanQr, ...user["_doc"] },
         Code: 200,
       });
     } else if (user.DEVICEID !== req.body.device_id) {
@@ -342,10 +377,15 @@ router.post("/login", async (req, res) => {
         Code: 404,
       });
     } else if (user.DEVICEID == req.body.device_id) {
+      // update hr app version in user table
+      user.HRAPPVERSION = req.body.HRAPPVERSION;
+      await user.save();
+
+      console.log(user, "============== user");
       res.status(200).json({
         Status: "Success",
         Message: "User authenticated successfully",
-        Data: user,
+        Data: { scanQr: scanQr, ...user["_doc"] },
         Code: 200,
       });
     }
@@ -589,7 +629,7 @@ router.post("/apply-leave", async (req, res) => {
       EMPNO,
       LVCODE,
       BRCODE,
-      ENTRYBY
+      ENTRYBY,
     );
     if (requiredFieldsValidation) {
       return res.status(400).json({
@@ -613,6 +653,23 @@ router.post("/apply-leave", async (req, res) => {
     const parsedLVTODT = moment(LVTODT, "DD-MM-YYYY").toDate();
     const lvYear = parsedLVFRMDT.getFullYear().toString();
     const lvToYear = parsedLVTODT.getFullYear().toString();
+
+    // cant apply leave for back dates
+
+    const twoDaysBeforeLastDate = moment()
+      .endOf("month")
+      .subtract(2, "days")
+      .format("YYYY-MM-DD");
+    if (
+      moment(LVFRMDT, "DD-MM-YYYY").isAfter(twoDaysBeforeLastDate) &&
+      moment(LVFRMDT, "DD-MM-YYYY").isSameOrBefore(twoDaysBeforeLastDate)
+    ) {
+      return res.status(400).json({
+        Status: "Failed",
+        Message: "Leave Can't Apply For Back Dates",
+        Code: 400,
+      });
+    }
 
     if (isNaN(parsedLVFRMDT.getTime()) || isNaN(parsedLVTODT.getTime())) {
       return res.status(400).json({
@@ -668,6 +725,8 @@ router.post("/apply-leave", async (req, res) => {
     }
     console.log("======leaveDuration", leaveDuration);
 
+    const year_YYYY = moment().format("YYYY");
+
     if (LVCODE === "CL") {
       // Check for maximum consecutive CL days
       if (leaveDuration > 2) {
@@ -678,6 +737,54 @@ router.post("/apply-leave", async (req, res) => {
           Code: 400,
         });
       }
+
+      // check clubbing for WH or DH
+      const checkClubbing = await Holiday.findOne({
+        HLDYYR: year_YYYY,
+        HLDYDT: {
+          $in: [
+            moment(parsedLVFRMDT).add(1, "days"),
+            moment(parsedLVFRMDT).subtract(1, "days"),
+          ],
+        },
+        HLDYCD: { $in: ["DH", "WH"] },
+        BRCODE: BRCODE,
+      });
+
+      // check if cl applied before and after date
+
+      const checkClApplied = await LeaveDetail.findOne({
+        LVCODE: "CL",
+        LVFRMDT: {
+          $gte: new Date(moment(parsedLVFRMDT).add(2, "days")),
+          $lte: new Date(moment(parsedLVFRMDT).subtract(2, "days")),
+        },
+        EMPNO: EMPNO,
+      });
+
+      if (checkClubbing !== null && checkClApplied !== null) {
+        return res.status(400).json({
+          Status: "Failed",
+          Message: "Causal leave cannot be applied before or after DH or WH",
+          Code: 400,
+        });
+      }
+    }
+
+    if (LVCODE === "CO") {
+      // Check for maximum consecutive CL days
+      console.log(LVCODE, "============== LVCODE ========================");
+      console.log(
+        leaveDuration,
+        "==============leaveDuration leaveDuration ===========",
+      );
+      if (leaveDuration > 2) {
+        return res.status(400).json({
+          Status: "Failed",
+          Message: "Comp-Off cannot be taken for more than 2 consecutive days",
+          Code: 400,
+        });
+      }
     }
 
     const isHolidayValidation = await validateHolidayDate(
@@ -685,7 +792,7 @@ router.post("/apply-leave", async (req, res) => {
       parsedLVTODT,
       BRCODE,
       lvYear,
-      lvToYear
+      lvToYear,
     );
     if (isHolidayValidation) {
       return res.status(400).json({
@@ -695,7 +802,10 @@ router.post("/apply-leave", async (req, res) => {
       });
     }
 
-    if (LVCODE != "OD" && LVCODE != "OS") {
+    if (LVCODE != "DO" && LVCODE != "OS") {
+      console.log(
+        "=============================== inside block =====================================",
+      );
       const leaveBalanceValidation = await validateLeaveBalance(
         EMPNO,
         LVCODE,
@@ -703,7 +813,7 @@ router.post("/apply-leave", async (req, res) => {
         parsedLVTODT,
         parsedLVFRMDT,
         isGradeE3OrBelow,
-        leaveDuration
+        leaveDuration,
       );
       console.log("=========leaveBalanceValidation", leaveBalanceValidation);
       if (leaveBalanceValidation) {
@@ -719,7 +829,7 @@ router.post("/apply-leave", async (req, res) => {
         LVCODE,
         parsedLVFRMDT,
         parsedLVTODT,
-        isGradeE3OrBelow
+        isGradeE3OrBelow,
       );
       if (leaveSandwichValidation) {
         return res.status(400).json({
@@ -736,7 +846,7 @@ router.post("/apply-leave", async (req, res) => {
 
     let ISESLVCODE, IISESLVCODE;
 
-    if (LVCODE == "OD" || LVCODE == "OS") {
+    if (LVCODE == "DO" || LVCODE == "OS") {
       TYPE = "MOVEMENT";
       ISESLVCODE = LVCODE;
       IISESLVCODE = LVCODE;
@@ -811,13 +921,110 @@ router.post("/apply-leave", async (req, res) => {
     const applicationNo = LVAPNO;
 
     const notificationData = {
-      LVAPNO:applicationNo,
+      LVAPNO: applicationNo,
       EMPNO: userExists.REPMGR,
       BRCODE: userExists.BRCODE,
       TITLE: "Leave Application",
       DESC: `You have received a leave application from ${employeeName} (Application No: ${applicationNo}) for your approval.`,
     };
     await createNotification(notificationData);
+
+    // reduce leave balance count
+
+    const startDate = moment(LVFRMDT, "DD-MM-YYYY");
+    const endDate = moment(LVTODT, "DD-MM-YYYY");
+    const year = moment().format("YY");
+    console.log(
+      startDate,
+      "====================== startDate ========================",
+    );
+    console.log(
+      endDate,
+      "====================== endDate ========================",
+    );
+    console.log(year, "====================== year =====================");
+    const daysCount = endDate.diff(startDate, "days");
+    if (LVCODE === "CL") {
+      const dbCount = await BalanceLeave.findOne({
+        PA_ELSTD_EMPNO: EMPNO,
+        PA_ELSTD_LVCODE: "CL",
+        PA_ELSTD_LVYR: year,
+      });
+      const count = Number(dbCount.PA_ELSTD_BAL) - Number(daysCount + 1);
+
+      await BalanceLeave.findOneAndUpdate(
+        { PA_ELSTD_EMPNO: EMPNO, PA_ELSTD_LVCODE: "CL", PA_ELSTD_LVYR: year },
+        {
+          $set: {
+            PA_ELSTD_BAL: count,
+          },
+        },
+      );
+    }
+
+    // DEDUCT EL FROM LEAVE BALANCE
+
+    if (LVCODE === "EL") {
+      const dbCount = await BalanceLeave.findOne({
+        PA_ELSTD_EMPNO: EMPNO,
+        PA_ELSTD_LVCODE: "EL",
+        PA_ELSTD_LVYR: year,
+      });
+      const count = Number(dbCount.PA_ELSTD_BAL) - Number(daysCount + 1);
+
+      await BalanceLeave.findOneAndUpdate(
+        { PA_ELSTD_EMPNO: EMPNO, PA_ELSTD_LVCODE: "EL", PA_ELSTD_LVYR: year },
+        {
+          $set: {
+            PA_ELSTD_BAL: count,
+          },
+        },
+      );
+    }
+
+    // DEDUCT SL FROM LEAVE BALANCE
+
+    if (LVCODE === "SL") {
+      const dbCount = await BalanceLeave.findOne({
+        PA_ELSTD_EMPNO: EMPNO,
+        PA_ELSTD_LVCODE: "SL",
+        PA_ELSTD_LVYR: year,
+      });
+      const count = Number(dbCount.PA_ELSTD_BAL) - Number(daysCount + 1);
+
+      await BalanceLeave.findOneAndUpdate(
+        { PA_ELSTD_EMPNO: EMPNO, PA_ELSTD_LVCODE: "SL", PA_ELSTD_LVYR: year },
+        {
+          $set: {
+            PA_ELSTD_BAL: count,
+          },
+        },
+      );
+    }
+
+    const lastWorkingDate = getLastWorkingDate();
+
+    // check leave applied before 11 am on last working date
+    console.log(
+      lastWorkingDate,
+      "last working day ================================================",
+    );
+    console.log(
+      parsedLVFRMDT,
+      "last working day ================================================",
+    );
+    if (
+      moment(parsedLVFRMDT).isSame(lastWorkingDate) &&
+      moment().isBefore(moment().hour(11).minute(0).second(0))
+    ) {
+      return res.status(200).json({
+        Status: "Success",
+        Message:
+          "Leaves applied / approved for last working date shall be considered only for next month ",
+        Code: 200,
+      });
+    }
+
     return res.status(200).json({
       Status: "Success",
       Message: "Leave applied successfully",
@@ -847,7 +1054,7 @@ async function validateHolidayDate(
   parsedLVTODT,
   BRCODE,
   lvYear,
-  lvToYear
+  lvToYear,
 ) {
   const isHoliday =
     (await isHolidayDate(parsedLVFRMDT, BRCODE, lvYear)) ||
@@ -863,7 +1070,7 @@ async function validateLeaveBalance(
   parsedLVTODT,
   parsedLVFRMDT,
   isGradeE3OrBelow,
-  leaveDuration
+  leaveDuration,
 ) {
   const leaveBalance = await BalanceLeave.findOne({
     PA_ELSTD_EMPNO: EMPNO,
@@ -893,7 +1100,7 @@ async function validateLeaveSandwich(
   parsedLVFRMDT,
   parsedLVTODT,
   BRCODE,
-  isGradeE3OrBelow
+  isGradeE3OrBelow,
 ) {
   // Check if any of the days within the leave range are holidays
   if (isGradeE3OrBelow) {
@@ -909,10 +1116,10 @@ async function validateLeaveSandwich(
         const isHoliday = await isHolidayDate(
           date,
           BRCODE,
-          date.getFullYear().toString()
+          date.getFullYear().toString(),
         );
         return isHoliday;
-      })
+      }),
     );
     console.log("=========isAnyHolidayAsLeave", isAnyHolidayAsLeave);
     if (isAnyHolidayAsLeave.includes(true)) {
@@ -934,7 +1141,7 @@ function validateRequiredFields(
   EMPNO,
   LVCODE,
   BRCODE,
-  ENTRYBY
+  ENTRYBY,
 ) {
   if (!LVFRMDT || !LVTODT || !EMPNO || !LVCODE || !BRCODE || !ENTRYBY) {
     return "LVFRMDT, LVTODT, EMPNO, LVCODE, BRCODE, and ENTRYBY are required fields";
@@ -944,7 +1151,13 @@ function validateRequiredFields(
 
 router.post("/create-attendance", async (req, res) => {
   try {
-    console.log("==========req.body", req.body);
+    // console.log("==========req.body", req.body);
+    return res.status(500).json({
+      Status: "Failed",
+      Message: "Application Blocked. Please Contact HR",
+      Data: {},
+      Code: 500,
+    });
     const {
       EMPNO,
       BRCODE,
@@ -959,10 +1172,10 @@ router.post("/create-attendance", async (req, res) => {
 
     console.log(
       req.body,
-      "=================================== ios hr attendance ============================"
+      "=================================== ios hr attendance ============================",
     );
 
-    if (!EMPNO || !BRCODE || !attendanceType || !LAT || !LNG || !ADDRESS) {
+    if (!EMPNO || !BRCODE || !attendanceType) {
       return res.status(400).json({
         Status: "Failed",
         Message: "EMPNO, BRCODE, and attendanceType are required fields",
@@ -970,6 +1183,16 @@ router.post("/create-attendance", async (req, res) => {
         Code: 400,
       });
     }
+
+    // if(!LAT || !LNG || !ADDRESS){
+    //   return res.status(400).json({
+    //     Status: "Failed",
+    //     Message: "Location Doesn't Captured",
+    //     Data: {},
+    //     Code: 400,
+    //   });
+    // }
+
     if (attendanceType !== "CHECKIN" && attendanceType !== "CHECKOUT") {
       return res.status(400).json({
         Status: "Failed",
@@ -1041,6 +1264,14 @@ router.post("/create-attendance", async (req, res) => {
       BRCODE,
       HLDYYR: year,
     });
+    console.log(
+      holiday,
+      "============================== holiday =====================",
+    );
+    console.log(
+      userExists.isHolidayCheckIn,
+      "=======================userExists.isHolidayCheckIn==================",
+    );
     if (holiday && !userExists.isHolidayCheckIn) {
       return res.status(400).json({
         Status: "Failed",
@@ -1061,81 +1292,45 @@ router.post("/create-attendance", async (req, res) => {
       });
     }
 
-    //  if (userExists.LOCCODE == "NONFLD") {
-    //     const { BRLAT, BRLNG, MEASUREMENT } = branchRecord;
-    //     console.log(
-    //       "===BRLAT, BRLNG, MEASUREMENT========",
-    //       BRLAT,
-    //       BRLNG,
-    //       MEASUREMENT
-    //     );
-    //     if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
-    //       const { points } = MEASUREMENT;
-    //       let isWithinBounds = false;
+    if (userExists.LOCCODE == "NONFLD") {
+      const { BRLAT, BRLNG, MEASUREMENT } = branchRecord;
+      console.log(
+        "===BRLAT, BRLNG, MEASUREMENT========",
+        BRLAT,
+        BRLNG,
+        MEASUREMENT,
+      );
+      if (MEASUREMENT && MEASUREMENT.points && MEASUREMENT.points.length > 0) {
+        const { points } = MEASUREMENT;
+        const point = { lat: LAT, lng: LNG };
+        const bufferDistance = 100; // Adjust buffer as needed
 
-    //       const point = { lat: parseFloat(LAT), lng: parseFloat(LNG) };
-    //       const bufferDistance = 1000;
-    //       const isInside = isPointInPolygon(point, points, bufferDistance);
-    //       console.log("===isInside====", isInside);
+        const isInside = isPointInPolygon(point, points, bufferDistance);
+        console.log("Inside Polygon:", isInside);
 
-    //       // function isPointInPolygon(point, polygon) {
-    //       //     const { lat, lng } = point;
-    //       //     let inside = false;
-
-    //       //     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    //       //         const xi = polygon[i].lat, yi = polygon[i].lng;
-    //       //         const xj = polygon[j].lat, yj = polygon[j].lng;
-
-    //       //         const intersect = ((yi > lng) !== (yj > lng)) &&
-    //       //         (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
-
-    //       //         if (intersect) inside = !inside;
-    //       //     }
-    //       //     return inside;
-    //       // }
-    //       // const polygonPoints = MEASUREMENT.points.map(point => ({ lat: point.lat, lng: point.lng }));
-    //       // const pointToCheck = { lat: LAT, lng: LNG };
-    //       // const isInside = isPointInPolygon(pointToCheck, polygonPoints);
-    //       // console.log("==isInside=====",isInside);
-    //       // console.log(`The point (${LAT}, ${LNG}) is ${isInside ? 'inside' : 'outside'} the branch location.`);
-
-    //       // for (let i = 0; i < points.length - 1; i++) {
-    //       //     const start = points[i];
-    //       //     const end = points[i + 1];
-    //       //     const distanceStart = await calculateDistance(LAT, LNG, start.lat, start.lng);
-    //       //     const distanceEnd = await calculateDistance(LAT, LNG, end.lat, end.lng);
-    //       //     const distanceSegment = await calculateDistance(start.lat, start.lng, end.lat, end.lng);
-
-    //       //     console.log("===distanceStart========",distanceStart,distanceEnd, distanceSegment);
-    //       //     console.log("===math.aps========", Math.abs(distanceStart + distanceEnd - distanceSegment) );
-    //       //     if (Math.abs(distanceStart + distanceEnd - distanceSegment) < 150) {
-    //       //         isWithinBounds = true;
-    //       //         break;
-    //       //     }
-    //       // }
-    //       if (!isInside) {
-    //         console.log("==================== step 1========================")
-    //         return res.status(400).json({
-    //           Status: "Failed",
-    //           Message: "You are away from the branch location",
-    //           Data: {},
-    //           Code: 400,
-    //         });
-    //       }
-    //     } else {
-    //       console.log("==================== step 2========================")
-
-    //       let isWithinBounds = await isWithinRadius(LAT, LNG, BRLAT, BRLNG);
-    //       if (isWithinBounds == false) {
-    //         return res.status(400).json({
-    //           Status: "Failed",
-    //           Message: "You are away from the branch location",
-    //           Data: {},
-    //           Code: 400,
-    //         });
-    //       }
-    //     }
-    //   }
+        if (!isInside) {
+          return res.status(400).json({
+            Status: "Failed",
+            Message: "You are away from the branch location",
+            Data: {},
+            Code: 400,
+          });
+        }
+      } else {
+        let isWithinBounds = isWithinRadius(LAT, LNG, BRLAT, BRLNG);
+        if (!isWithinBounds) {
+          console.log(
+            "❌ You are away from the branch location (radius check)",
+          );
+          return res.status(400).json({
+            Status: "Failed",
+            Message: "You are away from the branch location",
+            Data: {},
+            Code: 400,
+          });
+        }
+      }
+    }
 
     if (userExists.LOCCODE == "NOLOC") {
       return res.status(400).json({
@@ -1189,7 +1384,7 @@ router.post("/create-attendance", async (req, res) => {
     await newAttendance.save();
     console.log(
       newAttendance,
-      "========================== newAttendance ========================"
+      "========================== newAttendance ========================",
     );
     if (attendanceType == "CHECKIN") {
       userExists.LASTLOGIN = today;
@@ -1230,7 +1425,7 @@ router.post("/create-attendance", async (req, res) => {
       });
       console.log(
         existingPermissions,
-        "====================== getPermissonCount ============================"
+        "====================== getPermissonCount ============================",
       );
 
       let permissionsDuration15 = 3;
@@ -1240,10 +1435,10 @@ router.post("/create-attendance", async (req, res) => {
       if (existingPermissions.length > 0) {
         // Count existing permissions for each duration
         const existingDuration15Count = await existingPermissions.filter(
-          (permission) => permission.DURATION === "15"
+          (permission) => permission.DURATION === "15",
         ).length;
         const existingDuration60Count = await existingPermissions.filter(
-          (permission) => permission.DURATION === "60"
+          (permission) => permission.DURATION === "60",
         ).length;
 
         // Update default counts by subtracting existing counts
@@ -1251,7 +1446,7 @@ router.post("/create-attendance", async (req, res) => {
         permissionsDuration60 -= existingDuration60Count;
       }
       console.log(
-        `Difference: ${hours} hours, ${minutes} minutes, ${seconds} seconds`
+        `Difference: ${hours} hours, ${minutes} minutes, ${seconds} seconds`,
       );
       let newPermission = {
         STATUS: "APPROVED",
@@ -1296,136 +1491,79 @@ router.post("/create-attendance", async (req, res) => {
       const createPermission = async (payload) => {
         console.log(
           payload,
-          "===================== permission payload ==========================="
+          "===================== permission payload ===========================",
         );
         await Permission.create(payload);
       };
       const createLeave = async (payload) => {
         console.log(
           payload,
-          "===================== leave payload ==========================="
+          "===================== leave payload ===========================",
         );
         await LeaveDetail.create(payload);
       };
-      if (hours === 2) {
-        if (permissionsDuration60 === 2) {
-          for (let i = 1; i <= 2; i++) {
-            newPermission.DURATION = "60";
-            // Save the new permission request
-            createPermission(newPermission);
-          }
-        } else if (permissionsDuration60 === 1) {
-          newPermission.DURATION = "60";
-          // Save the new permission request
-          createPermission(newPermission);
-        } else {
-          const balanceEL = await BalanceLeave.findOne({
-            PA_ELSTD_LVYR: newAttendance.LVDT.getFullYear().toString(),
-            PA_ELSTD_LVCODE: "EL",
-          });
-          const balanceCL = await BalanceLeave.findOne({
-            PA_ELSTD_LVYR: newAttendance.LVDT.getFullYear().toString(),
-            PA_ELSTD_LVCODE: "CL",
-          });
-          if (balanceEL?.PA_ELSTD_BAL > 0) {
-            // CHECK IF EL AVAILABLE
-            const applicationCount = (await LeaveDetail.countDocuments()) + 1;
-            leavePayload.LVAPNO = applicationCount;
-            (leavePayload.ISESLVCODE = "EL"),
-              (leavePayload.IISESLVCODE = "EL"),
-              (leavePayload.LVCODE = "EL"),
-              createLeave(leavePayload); // CHANGE IF NEEDED USING APPLY LEAVE API USING AXIOS
-            await BalanceLeave.findOneAndUpdate({
-              PA_ELSTD_EMPNO,
-              PA_ELSTD_LVYR: newAttendance.LVDT.getFullYear().toString(),
-              PA_ELSTD_LVCODE: "EL",
-              PA_ELSTD_BAL: balanceEL.PA_ELSTD_BAL - 1,
-            });
-          }
-          //  else if (
-          //   // CHECK IF CL AVAILABLE
-          //   balanceEL.PA_ELSTD_BAL === 0 &&
-          //   balanceCL.PA_ELSTD_BAL > 0
-          // ) {
-          //   const existingAttendanceMaster = await LeaveAttendanceMaster.findOne({
-          //     EMPNO,
-          //     BRCODE,
-          // });
-          // if (existingAttendanceMaster) {
-          //     const existingRecord = existingAttendanceMaster.attendanceRecords.find(record => moment(record.LVDT).isSame(currentDate, 'day'));
-          //     //console.log("==========existingRecord",existingRecord);
-          //     if (!existingRecord) {
-          //         existingAttendanceMaster.attendanceRecords.push({
-          //             LVAPNO: 99999999,
-          //             LVYR: moment(LVDT).format('YYYY'),
-          //             LVDT,
-          //             EMPNO,
-          //             EMPNAME: ENAME,
-          //             BRCODE,
-          //             BRSTARTTIME: branchRecord.BRSTARTTIME,
-          //             BRENDTIME: branchRecord.BRENDTIME,
-          //             ISESLVCODE,
-          //             IISESLVCODE,
-          //             LVCODE,
-          //             ENTRYBY: '',
-          //             ENTRYDT: LVDT,
-          //             MODBY: '',
-          //             MODDT: LVDT,
-          //             SOURCE: 'JLSMART-AUTOLOGOUT',
-          //             TYPE: 'ATTENDANCE'
-          //         });
-          //         await existingAttendanceMaster.save();
-          //     }
-          // } else {
-          //     const newAttendanceMaster = new LeaveAttendanceMaster({
-          //         EMPNO,
-          //         EMPID: userExists._id,
-          //         GRADE:userExists.GRADE,
-          //         DEPT:userExists.DEPT,
-          //         BRCODE,
-          //         attendanceRecords: [{
-          //             LVAPNO: 99999999,
-          //             LVYR: moment(LVDT).format('YYYY'),
-          //             LVDT,
-          //             EMPNO,
-          //             EMPNAME: ENAME,
-          //             BRCODE,
-          //             BRSTARTTIME: branchRecord.BRSTARTTIME,
-          //             BRENDTIME: branchRecord.BRENDTIME,
-          //             ISESLVCODE,
-          //             IISESLVCODE,
-          //             LVCODE:"LOP",
-          //             ENTRYBY: '',
-          //             ENTRYDT: LVDT,
-          //             MODBY: '',
-          //             MODDT: LVDT,
-          //             SOURCE: 'JLSMART-AUTOLOGOUT',
-          //             TYPE: 'ATTENDANCE'
-          //         }]
-          //     });
-          //     await newAttendanceMaster.save();
-          // }
-          // }
-        }
-      } else if (hours === 1) {
-        newPermission.DURATION = "60";
+
+      // check if permission already approved. If approved should not auto deduct
+
+      const startOfDay = moment().startOf("days");
+      const endOfDay = moment().endOf("days");
+
+      const existingApprovedPermissions = await Permission.find({
+        EMPNO,
+        PERMISSIONDATE: {
+          $gte: new Date(startOfDay),
+          $lte: new Date(endOfDay),
+        },
+      });
+
+      // check if OD already approved. If approved should not auto deduct
+
+      const existingApprovedOD = await LeaveDetail.find({
+        EMPNO,
+        STATUS: "APPROVED",
+        LVFRMDT: {
+          $gte: new Date(startOfDay),
+          $lte: new Date(endOfDay),
+        },
+      });
+
+      // auto deduct permission based of approved permissions
+      if (
+        hours > 1 &&
+        hours <= 2 &&
+        !existingApprovedPermissions &&
+        !existingApprovedOD &&
+        existingApprovedPermissions.DURATION !== "120" &&
+        attendanceType === "CHECKIN"
+      ) {
+        newPermission.DURATION = "120"; // deduct 2hr permission if reaches 1hr above if no permissions approved for 2hr
         createPermission(newPermission);
-      } else if (hours === 0 && minutes > 15 && minutes <= 30) {
-        newPermission.DURATION = "15";
+      } else if (
+        minutes > 15 &&
+        minutes <= 59 &&
+        !existingApprovedPermissions &&
+        !existingApprovedOD &&
+        existingApprovedPermissions.DURATION !== "60" &&
+        attendanceType === "CHECKIN"
+      ) {
+        newPermission.DURATION = "60"; // deduct 1hr permission if reaches 15min above and 1hr below if no permissions approved for 1hr
         createPermission(newPermission);
-      } else if (hours === 0 && minutes > 30 && minutes <= 45) {
-        for (let i = 1; i <= 2; i++) {
-          newPermission.DURATION = "15";
-          // Save the new permission request
-          createPermission(newPermission);
-        }
-      } else if (hours === 0 && minutes > 45 && minutes <= 60) {
-        for (let i = 1; i <= 3; i++) {
-          newPermission.DURATION = "15";
-          // Save the new permission request
-          createPermission(newPermission);
-        }
+      } else if (
+        minutes > 5 &&
+        minutes <= 15 &&
+        !existingApprovedPermissions &&
+        !existingApprovedOD &&
+        existingApprovedPermissions.DURATION !== "15" &&
+        attendanceType === "CHECKIN"
+      ) {
+        newPermission.DURATION = "15"; // deduct 15min permission if reaches 5min above and  15min below if no permissions approved for 1hr
+        createPermission(newPermission);
       }
+
+      // TODO:: NEED TO VALIDATE MORE THAN TWO HOURS.
+      // else if(hours <=3 && hours>2){
+
+      // }
     }
 
     return res.json({
@@ -1456,7 +1594,12 @@ router.post("/leave-list", async (req, res) => {
         Code: 400,
       });
     }
-    const leaveList = await LeaveDetail.find({ EMPNO });
+    // const startofMonth = moment().startOf("month").toDate();
+
+    const leaveList = await LeaveDetail.find({
+      EMPNO,
+      // createdAt: { $gte: startofMonth },
+    }).sort({ ENTRYDT: -1 });
     return res.status(200).json({
       Status: "Success",
       Message: "Leave list retrieved successfully",
@@ -1573,15 +1716,16 @@ router.post("/available-leaves", async (req, res) => {
     console.log("===========existingPermissions", existingPermissions);
     let permissionsDuration15 = 3;
     let permissionsDuration60 = 2;
+    // let permissionsDuration60 = 2;
     let movementCount = 0;
 
     if (existingPermissions.length > 0) {
       // Count existing permissions for each duration
       const existingDuration15Count = existingPermissions.filter(
-        (permission) => permission.DURATION === "15"
+        (permission) => permission.DURATION === "15",
       ).length;
       const existingDuration60Count = existingPermissions.filter(
-        (permission) => permission.DURATION === "60"
+        (permission) => permission.DURATION === "60",
       ).length;
 
       // Update default counts by subtracting existing counts
@@ -1604,11 +1748,12 @@ router.post("/available-leaves", async (req, res) => {
     }
 
     availableLeaves["PermissionsDuration15"] = permissionsDuration15;
-    availableLeaves["PermissionsDuration60"] = permissionsDuration60;
+    availableLeaves["PermissionsDuration60"] =
+      permissionsDuration60 < 0 ? 0 : permissionsDuration60;
     availableLeaves["movementCount"] = movementCount;
 
     const employeeDetails = await EmployeeMaster.findOne({ EMPNO }).select(
-      "ENAME"
+      "ENAME",
     );
     console.log("========employeeDetails", employeeDetails, EMPNO);
     let totalLeaves = totalBalanceLeaves + totalUsedLeaves;
@@ -1648,7 +1793,7 @@ router.post("/check-status", async (req, res) => {
       });
     }
     const employeeDetails = await EmployeeMaster.findOne({ EMPNO }).select(
-      "LASTLOGIN BRCODE REPMGRSTATUS ORIGINALPHOTO LASTLOGOUT"
+      "LASTLOGIN BRCODE REPMGRSTATUS ORIGINALPHOTO LASTLOGOUT",
     );
     //console.log("========employeeDetails",employeeDetails, req.body);
     if (!employeeDetails) {
@@ -1675,7 +1820,7 @@ router.post("/check-status", async (req, res) => {
     }
     console.log(
       LASTLOGOUTTIME,
-      "=================== LASTLOGOUTTIME =================="
+      "=================== LASTLOGOUTTIME ==================",
     );
     let HRNAME = "JOHNSON HR";
     let HRPHONE = "261520003";
@@ -1686,7 +1831,7 @@ router.post("/check-status", async (req, res) => {
     //console.log("=========branchAdminDetails",branchAdminDetails);
     const filteredBranchAdminDetails = branchAdminDetails.find((details) => {
       return details.access_location.some(
-        (location) => location.BRCODE === employeeDetails.BRCODE
+        (location) => location.BRCODE === employeeDetails.BRCODE,
       );
     });
 
@@ -1727,7 +1872,7 @@ router.post("/check-status", async (req, res) => {
       const pendingLeaveDetailsCount = await LeaveDetail.countDocuments({
         APPROVER: EMPNO,
         STATUS: "PENDING",
-        //LVCODE: { $nin: ["OD", "OS"] }, // added recently
+        //LVCODE: { $nin: ["DO", "OS"] }, // added recently
       });
       responseData.PENDINGCOUNT += pendingPermissionsCount;
       responseData.PENDINGCOUNT += pendingLeaveDetailsCount;
@@ -1980,7 +2125,7 @@ router.post("/apply-permission", async (req, res) => {
         FROMTIME,
         TOTIME,
         DURATION,
-        ENTRYBY
+        ENTRYBY,
       );
       return res.status(400).json({
         Status: "Failed",
@@ -2017,25 +2162,25 @@ router.post("/apply-permission", async (req, res) => {
       "==========",
       FROMTIME,
       branchWorkingHours.start,
-      branchWorkingHours.end
+      branchWorkingHours.end,
     );
     console.log(
       "=====TOTIME=====",
       TOTIME,
       branchWorkingHours.start,
       branchWorkingHours.end,
-      convertTo24HourFormat(FROMTIME)
+      convertTo24HourFormat(FROMTIME),
     );
     if (
       !isTimeWithinRange(
         convertTo24HourFormat(FROMTIME),
         branchWorkingHours.start,
-        branchWorkingHours.end
+        branchWorkingHours.end,
       ) ||
       !isTimeWithinRange(
         convertTo24HourFormat(TOTIME),
         branchWorkingHours.start,
-        branchWorkingHours.end
+        branchWorkingHours.end,
       )
     ) {
       return res.status(400).json({
@@ -2089,12 +2234,12 @@ router.post("/apply-permission", async (req, res) => {
     console.log("============existingPermissions", existingPermissions);
     let totalApprovedDuration = 0;
     const filteredPermissions = existingPermissions.filter(
-      (perm) => perm.DURATION !== "15"
+      (perm) => perm.DURATION !== "15",
     );
     if (existingPermissions) {
       totalApprovedDuration = filteredPermissions.reduce(
         (total, perm) => total + parseInt(perm.DURATION),
-        0
+        0,
       );
     }
     if (
@@ -2227,7 +2372,7 @@ router.post("/permission-durations", async (req, res) => {
 
     permissions.forEach((permission) => {
       const index = durations.findIndex(
-        (duration) => duration.DURATION === permission.DURATION
+        (duration) => duration.DURATION === permission.DURATION,
       );
       if (index !== -1) {
         durations.splice(index, 1);
@@ -2358,10 +2503,10 @@ router.post("/movement-list", async (req, res) => {
 router.get("/logoutReason", function (req, res) {
   var StateList = [
     {
-      logout_reason: "LUNCH BREAK",
+      logout_reason: "DAY OUT",
     },
     {
-      logout_reason: "DAY OUT",
+      logout_reason: "LUNCH BREAK",
     },
   ];
   res.json({
@@ -2383,11 +2528,18 @@ router.post("/approver-list", async (req, res) => {
         Code: 400,
       });
     }
+    const startofMonth = moment().startOf("month").toDate();
     const leaveListPromise = LeaveDetail.find({
       APPROVER: EMPNO,
-      //LVCODE: { $nin: ["OD", "OS"] },
+      //LVCODE: { $nin: ["DO", "OS"] },
+      createdAt: { $gte: startofMonth },
+    }).sort({ _id: -1 });
+    const permissionListPromise = Permission.find({
+      APPROVER: EMPNO,
+      createdAt: { $gte: startofMonth },
+    }).sort({
+      _id: -1,
     });
-    const permissionListPromise = Permission.find({ APPROVER: EMPNO });
 
     const [leaveList, permissionList] = await Promise.all([
       leaveListPromise,
@@ -2436,7 +2588,7 @@ router.post("/approver-list", async (req, res) => {
           updatedAt: leave.updatedAt,
         };
         responseData.push(formattedLeave);
-      })
+      }),
     );
 
     // Process permissionList
@@ -2465,7 +2617,7 @@ router.post("/approver-list", async (req, res) => {
           updatedAt: permission.updatedAt,
         };
         responseData.push(formattedPermission);
-      })
+      }),
     );
     responseData.sort((a, b) => {
       if (a.STATUS === "PENDING" && b.STATUS !== "PENDING") {
@@ -2497,6 +2649,7 @@ router.post("/leave-permission-action", async (req, res) => {
   try {
     const { TYPE, ID, ACTION, EMPLOYEE_ID } = req.body;
     const today = moment().toDate();
+    const month = moment().month();
     console.log("====request", req.body);
     let request;
     if (TYPE === "Permission") {
@@ -2508,12 +2661,41 @@ router.post("/leave-permission-action", async (req, res) => {
           Code: 404,
         });
       }
+
+      // block previous month approval
+
+      console.log("===================== month", month);
+      console.log(
+        "====Number(moment(request.PERMISSIONDATE).format())",
+        Number(moment(request.PERMISSIONDATE).format("MM")),
+      );
+
+      if (
+        Number(moment(request.PERMISSIONDATE).format("MM")) >
+        Number(month) + 1
+      ) {
+        return res.status(404).json({
+          Status: "Failed",
+          Message: "Cant Approve Permission For Previous Month",
+          Code: 404,
+        });
+      }
     } else {
       request = await LeaveDetail.findById(ID);
       if (!request) {
         return res.status(404).json({
           Status: "Failed",
           Message: "Leave request not found",
+          Code: 404,
+        });
+      }
+
+      // block previous month leave approval
+
+      if (Number(moment(request.ENTRYDT).format("MM")) > Number(month) + 1) {
+        return res.status(404).json({
+          Status: "Failed",
+          Message: "Cant Approve For Previous Month",
           Code: 404,
         });
       }
@@ -2538,7 +2720,7 @@ router.post("/leave-permission-action", async (req, res) => {
     } else {
       if (
         ACTION === "APPROVED" &&
-        request.LVCODE != "OD" &&
+        request.LVCODE != "DO" &&
         request.LVCODE != "OS"
       ) {
         const employeeExists = await validateUserExistence(request.EMPNO);
@@ -2557,7 +2739,7 @@ router.post("/leave-permission-action", async (req, res) => {
           lvYear,
           request.LVTODT,
           request.LVFRMDT,
-          isGradeE3OrBelow
+          isGradeE3OrBelow,
         );
         if (leaveBalanceValidation) {
           return res.status(400).json({
@@ -2572,7 +2754,7 @@ router.post("/leave-permission-action", async (req, res) => {
           request.LVCODE,
           request.LVFRMDT,
           request.LVTODT,
-          isGradeE3OrBelow
+          isGradeE3OrBelow,
         );
         if (leaveSandwichValidation) {
           return res.status(400).json({
@@ -2589,6 +2771,22 @@ router.post("/leave-permission-action", async (req, res) => {
       request.MODDT = today;
     }
 
+    // revoke permissions for OD
+    if (request.LVCODE === "DO") {
+      const findPermissons = await Permission.findOne({
+        EMPNO: request.EMPNO,
+        STATUS: "APPROVED",
+        PERMISSIONDATE: {
+          $gte: moment(request.LVFRMDT).startOf("day").toDate(),
+          $lte: moment(request.LVTODT).endOf("day").toDate(),
+        },
+      });
+      console.log("========findPermissons", findPermissons);
+      if (findPermissons) {
+        await Permission.deleteOne({ _id: findPermissons._id });
+      }
+    }
+
     // Save the updated request
     await request.save();
 
@@ -2599,6 +2797,7 @@ router.post("/leave-permission-action", async (req, res) => {
       Code: 200,
     });
   } catch (error) {
+    console.log(error);
     console.error(`Error processing ${TYPE} action:`, error);
     return res.status(500).json({
       Status: "Failed",
@@ -2619,8 +2818,11 @@ router.post("/compensatoryOffEntriesByApprover", async (req, res) => {
         Code: 400,
       });
     }
+    const startofMonth = moment().startOf("month").toDate();
+
     const compensatoryOffEntries = await CompensatoryOff.find({
       APPROVER: approverId,
+      createdAt: { $gte: startofMonth },
     });
     res.json({
       Status: "Success",
@@ -2672,6 +2874,36 @@ router.post("/compensatoryOffAction", async (req, res) => {
     compensatoryOffEntry.SANCBY = approverId;
     compensatoryOffEntry.SANCDT = moment().toDate();
     await compensatoryOffEntry.save();
+
+    const year = moment().format("YY");
+
+    const addcount =
+      compensatoryOffEntry.COMPOFFHOURS === 4
+        ? 0.5
+        : compensatoryOffEntry.COMPOFFHOURS === 8
+          ? 1
+          : 0; // Default value in case COMPOFFHOURS is neither 4 nor 8
+
+    // CREDIT COMP-OFF
+    const dbCount = await BalanceLeave.findOne({
+      PA_ELSTD_EMPNO: compensatoryOffEntry.EMPNO,
+      PA_ELSTD_LVCODE: "CO",
+      PA_ELSTD_LVYR: year,
+    });
+
+    if (dbCount) {
+      const count = Number(dbCount.PA_ELSTD_BAL) + Number(addcount);
+
+      await BalanceLeave.findOneAndUpdate(
+        {
+          PA_ELSTD_EMPNO: compensatoryOffEntry.EMPNO,
+          PA_ELSTD_LVCODE: "CO",
+          PA_ELSTD_LVYR: year,
+        },
+        { $set: { PA_ELSTD_BAL: count } },
+      );
+    }
+
     res.json({
       Status: "Success",
       Code: 200,
@@ -2716,6 +2948,7 @@ router.post("/hidecheckin", async (req, res) => {
       user_id: req.body.EMPNO,
       emp_type: {
         $in: [
+          // hide checkin to this designation
           "Engineer",
           "JIC Tech",
           "Mechanic",
@@ -2726,24 +2959,25 @@ router.post("/hidecheckin", async (req, res) => {
           "Van User",
         ],
       },
+      status: "Active",
     });
     const operationUsers = await UserManagement.findOne({
       agent_code: req.body.EMPNO,
-      user_designation: { $in: ["Mobile User", "Oper Tech"] },
+      user_designation: { $in: ["Mobile User", "Oper Tech"] }, // hide checkin to this designation
     });
 
     if (serviceUsers || operationUsers) {
       res.json({
         Status: "Success",
         Code: 200,
-        Message: "retrieved successfully",
+        Message: "Hide Checkin",
         Data: false,
       });
     } else {
       res.json({
         Status: "Success",
         Code: 200,
-        Message: "retrieved successfully",
+        Message: "Show Checkin",
         Data: true,
       });
     }
@@ -2764,7 +2998,7 @@ router.post("/holidayCheckin", async (req, res) => {
       {
         EMPNO: req.body.EMPNO,
       },
-      { $set: { isHolidayCheckIn: req.body.status } }
+      { $set: { isHolidayCheckIn: req.body.status } },
     );
 
     res.json({
@@ -2792,15 +3026,15 @@ router.post("/cancel-request", async (req, res) => {
     const startOfTomorrow = moment().add(1, "day").startOf("day").toISOString();
     console.log(
       startOfTomorrow,
-      "================= startOfTomorrow =================="
+      "================= startOfTomorrow ==================",
     );
     console.log(
       req.body,
-      "======================= req.body =========================="
+      "======================= req.body ==========================",
     );
     console.log(
       new Date(startOfTomorrow),
-      "==================new Date(startOfTomorrow)=============="
+      "==================new Date(startOfTomorrow)==============",
     );
     const request_future = await LeaveDetail.findOne({
       _id: new mongoose.Types.ObjectId(ID),
@@ -2813,7 +3047,7 @@ router.post("/cancel-request", async (req, res) => {
     // });
     console.log(
       request_future,
-      "================== request_future =================="
+      "================== request_future ==================",
     );
     if (!request_future) {
       return res.status(404).json({
@@ -2826,7 +3060,7 @@ router.post("/cancel-request", async (req, res) => {
     console.log(ID, "================= ID ==================");
     console.log(
       startOfTomorrow,
-      "================= startOfTomorrow =================="
+      "================= startOfTomorrow ==================",
     );
     data = await LeaveDetail.findOneAndUpdate(
       {
@@ -2835,7 +3069,7 @@ router.post("/cancel-request", async (req, res) => {
       },
       {
         $set: { STATUS: "CANCELLED" },
-      }
+      },
     );
     return res.status(200).json({
       Status: "Success",
@@ -2845,6 +3079,87 @@ router.post("/cancel-request", async (req, res) => {
     });
   } catch (error) {
     console.log(error, "error");
+  }
+});
+
+// Approve resignation withdrawl status by Manager
+
+router.post("/withdrawlupdate", async (req, res) => {
+  try {
+    await EmployeeMaster.findOneAndUpdate(
+      { EMPNO: req.body.EMPNO },
+      { $set: { RESIGN_WITHDRAWAL_STATUS: req.body.RESIGN_WITHDRAWAL_STATUS } },
+    );
+    await PushNotification.deleteOne({
+      EMPNO: req.body.EMPNO,
+      TITLE: "RESIGNATION-APPROVAL",
+    });
+    return res.status(200).json({
+      Status: "Success",
+      Message: "Resignation Withdrawl Updated Successfully",
+      Code: 200,
+    });
+  } catch (error) {
+    console.error("Error updating attendance data:", error);
+    return res.status(500).json({
+      Status: "Error",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
+  }
+});
+
+// Approve resignation withdrawl status by Manager
+
+router.post("/listwithdrawl", async (req, res) => {
+  try {
+    if (req.body.EDESIGN === "GENERAL MANAGER - HR") {
+      const data = await PushNotification.find({
+        // EMPNO: req.body.EMPNO,
+        READSTATUS: false,
+        TITLE: "RESIGNATION-APPROVAL",
+      });
+      const users = [];
+      if (data.length) {
+        for (const element of data) {
+          const userInfo = await EmployeeMaster.findOne({
+            EMPNO: element.EMPNO,
+          });
+          console.log(
+            userInfo,
+            "============================= userInfo ========================",
+          );
+          const element1 = { ...element["_doc"] };
+          element1.ENAME = userInfo["_doc"].ENAME;
+          console.log(
+            element1,
+            "============================== element =========================",
+          );
+
+          users.push(element1);
+        }
+      }
+      return res.status(200).json({
+        Status: "Success",
+        Message: "Resignation Withdrawl Updated Successfully",
+        Data: users,
+        Code: 200,
+      });
+    } else {
+      return res.status(200).json({
+        Status: "Success",
+        Message: "Resignation Withdrawl Updated Successfully",
+        Date: [],
+        Code: 200,
+      });
+    }
+  } catch (error) {
+    console.error("Error updating attendance data:", error);
+    return res.status(500).json({
+      Status: "Error",
+      Message: "Internal Server Error",
+      Code: 500,
+    });
   }
 });
 

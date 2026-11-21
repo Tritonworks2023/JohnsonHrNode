@@ -66,7 +66,13 @@ const leaveDetailSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   LODGINGPAIDBY: String,
-  JOBSPECIFIC: { type: String, default: "" },
+  JOBSPECIFIC: { type: String, default: "", trim: true },
+  MOVEMENTID: { type: String, default: "" },
+  APPNAME: { type: String, enum: ["MYTRAVEL", "HR"] },
+  qrcode: { type: String },
+  is_document_collected: { type: Boolean, default: false },
+  document_submitted_at: { type: Date, default: null },
+  document_submitted_by: { type: String, default: "" },
 });
 
 leaveDetailSchema.pre("save", function (next) {
