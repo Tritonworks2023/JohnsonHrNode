@@ -597,7 +597,41 @@ const maxAmountComposite = (city, grade) => {
   return -1;
 };
 
+// added this condition to restrict users to add expense other than conveyance for single day car movement -- done by sp on 20-11-2026
+
+const ALLOWED_CATEGORY = ["CONVEYANCE","COMPOSITE"];
+
+// amount may be "" / "200" / number, or amountDetails array [{ amount }]
+const hasAmount = (value) => {
+  if (value === null || value === undefined) return false;
+  if (Array.isArray(value)) {
+    return value.some((a) => Number(a?.amount) > 0);
+  }
+  return Number(value) > 0;
+};
+
+// Returns true if valid (only CONVEYANCE has amounts), false otherwise
+function validateOnlyConveyance(claim) {
+  const invalid = [];
+
+  // 1. expenseDeviationData: object keyed by category
+  for (const [cat, data] of Object.entries(claim.expenseDeviationData || {})) {
+    if (ALLOWED_CATEGORY.includes(cat)) continue;
+    if (hasAmount(data?.amount) || hasAmount(data?.amountDetails)) {
+      invalid.push(cat);
+    }
+  }
+
+  // 2. expenseDeviationTDA: BOARDING / COMPOSITE (not CONVEYANCE, so no amount allowed)
+  for (const [cat, data] of Object.entries(claim.expenseDeviationTDA || {})) {
+    if (hasAmount(data?.amount)) invalid.push(`${cat} (TDA)`);
+  }
+
+  return { valid: invalid.length === 0, invalid };
+}
+
 module.exports = {
+  validateOnlyConveyance,
   validateTravelExpense,
   validateBoardingExpense,
   validateLodgingExpense,

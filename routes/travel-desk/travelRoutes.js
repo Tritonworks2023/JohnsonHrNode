@@ -34,6 +34,7 @@ const {
   maxAmountOfLoading,
   maxAmountOfBoading,
   maxAmountComposite,
+  validateOnlyConveyance,
 } = require("./travelShareRoutes");
 
 const { createNotification } = require("../hr-admin/shareRoutes");
@@ -646,6 +647,33 @@ router.post("/add-expenses", async (req, res) => {
             Message: `Please enter city`,
             Code: 400,
           });
+        }
+
+        // added by sp on 20-11-2026 for single day car validation
+
+        const totalTravelDays =
+          moment
+            .duration(moment(returnDate).diff(moment(departureDate)))
+            .asDays() + 1;
+
+        if (
+          totalTravelDays === 1 &&
+          travelDesk.movement.JOURNEYMODE === "CAR"
+        ) {
+          const { valid, invalid } = validateOnlyConveyance(req.body);
+          if (!valid && invalid.join(", ") === "TRAVEL") {
+            return res.status(400).json({
+              Status: "Failed",
+              Message: `For ${invalid.join(", ")}, Submit petrol claim separately`,
+              Code: 400,
+            });
+          } else if (!valid) {
+            return res.status(400).json({
+              Status: "Failed",
+              Message: `${invalid.join(", ")} are not allowed for single-day car travel`,
+              Code: 400,
+            });
+          }
         }
 
         switch (type) {
